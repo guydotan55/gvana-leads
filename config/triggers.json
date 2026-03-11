@@ -1,0 +1,14 @@
+{
+  "triggers": [
+    {
+      "id": "welcome",
+      "name": "ברוכים הבאים",
+      "enabled": true,
+      "when": "new_lead",
+      "delay_minutes": 5,
+      "template": "",
+      "sender": "default",
+      "capi_event": "Lead"
+    }
+  ]
+}
