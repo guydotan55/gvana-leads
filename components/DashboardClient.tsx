@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import StatsBar from "./StatsBar";
 import LeadTable from "./LeadTable";
+import SendMessageDialog from "./SendMessageDialog";
 import { t } from "@/lib/i18n";
 import { clientConfig } from "@/client.config";
 import type { Lead } from "@/lib/sheets";
@@ -13,6 +14,7 @@ export default function DashboardClient() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [sendingTo, setSendingTo] = useState<Lead | null>(null);
 
   const fetchLeads = useCallback(async () => {
     try {
@@ -47,8 +49,7 @@ export default function DashboardClient() {
   const qualified = leads.filter((l) => l.status === "qualified").length;
 
   function handleSendMessage(lead: Lead) {
-    // Will be implemented in Chunk 3 (Template Manager + Send flow)
-    console.log("Send message to:", lead.name);
+    setSendingTo(lead);
   }
 
   function handleQualify(lead: Lead) {
@@ -91,6 +92,13 @@ export default function DashboardClient() {
         onSendMessage={handleSendMessage}
         onQualify={handleQualify}
       />
+      {sendingTo && (
+        <SendMessageDialog
+          lead={sendingTo}
+          onClose={() => setSendingTo(null)}
+          onSent={fetchLeads}
+        />
+      )}
     </div>
   );
 }
