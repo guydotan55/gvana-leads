@@ -71,7 +71,7 @@ export default function TemplateManager() {
 
   function getPlaceholders(template: WhatsAppTemplate): string[] {
     const matches = template.structure.body.text.match(/\{\{(\d+)\}\}/g) || [];
-    return [...new Set(matches.map((m) => m.replace(/[{}]/g, "")))];
+    return Array.from(new Set(matches.map((m) => m.replace(/[{}]/g, ""))));
   }
 
   function getPreviewText(template: WhatsAppTemplate): string {

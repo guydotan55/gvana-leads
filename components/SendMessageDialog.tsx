@@ -6,7 +6,6 @@ import { clientConfig } from "@/client.config";
 import MessagePreview from "./MessagePreview";
 import type { Lead } from "@/lib/sheets";
 import type { WhatsAppTemplate } from "@/lib/infobip";
-import columnsConfig from "@/config/columns.json";
 
 interface SendMessageDialogProps {
   lead: Lead;
