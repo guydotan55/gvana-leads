@@ -52,9 +52,19 @@ export default function DashboardClient() {
     setSendingTo(lead);
   }
 
-  function handleQualify(lead: Lead) {
-    // Will be implemented in Chunk 4 (Qualify flow)
-    console.log("Qualify:", lead.name);
+  async function handleQualify(lead: Lead) {
+    try {
+      const res = await fetch("/api/leads/qualify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadRow: lead.row }),
+      });
+      if (res.ok) {
+        fetchLeads();
+      }
+    } catch (err) {
+      console.error("Qualify failed:", err);
+    }
   }
 
   if (loading) {

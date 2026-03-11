@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendTemplateMessage } from "@/lib/infobip";
 import { getLeads, updateLeadCells } from "@/lib/sheets";
+import { sendCAPIEvent } from "@/lib/capi";
 import { readFile } from "fs/promises";
 import path from "path";
 
@@ -57,6 +58,12 @@ export async function POST(request: NextRequest) {
       lastMessage: templateName,
       lastMessageDate: now,
     });
+
+    sendCAPIEvent({
+      eventName: "Lead",
+      phone: lead.phone,
+      email: lead.email,
+    }).catch((err) => console.error("CAPI Lead event failed:", err));
 
     return NextResponse.json({
       success: true,
