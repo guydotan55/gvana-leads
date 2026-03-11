@@ -1,0 +1,15 @@
+{
+  "sheetName": "לידים",
+  "columns": {
+    "name": { "index": 0, "header": "שם מלא" },
+    "phone": { "index": 1, "header": "טלפון" },
+    "email": { "index": 2, "header": "אימייל" },
+    "source": { "index": 3, "header": "מקור" },
+    "status": { "index": 4, "header": "סטטוס" },
+    "lastMessage": { "index": 5, "header": "הודעה אחרונה" },
+    "lastMessageDate": { "index": 6, "header": "תאריך הודעה" },
+    "messageId": { "index": 7, "header": "מזהה הודעה" },
+    "createdAt": { "index": 8, "header": "תאריך יצירה" },
+    "notes": { "index": 9, "header": "הערות" }
+  }
+}
