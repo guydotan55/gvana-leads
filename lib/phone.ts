@@ -14,6 +14,7 @@ const COUNTRY_CODES: Record<string, string> = {
  *   (555) 123-4567  → +15551234567   (locale: en)
  */
 export function normalizePhone(phone: string, locale?: string): string {
+  if (phone.startsWith("p:")) phone = phone.slice(2);
   const cleaned = phone.replace(/[^\d+]/g, "");
 
   if (cleaned.startsWith("+")) {

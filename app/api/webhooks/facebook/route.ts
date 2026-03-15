@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { appendLead } from "@/lib/sheets";
-import { normalizePhone } from "@/lib/phone";
+
+// Webhook verification for Facebook Lead Ads.
+// Leads arrive in the Google Sheet via Zapier/automation, not through this webhook.
+// This endpoint only handles the verification handshake.
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -17,43 +19,8 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-
-    for (const entry of body.entry || []) {
-      for (const change of entry.changes || []) {
-        if (change.field === "leadgen") {
-          const leadData = change.value;
-
-          const fieldData: Record<string, string> = {};
-          for (const field of leadData.field_data || []) {
-            fieldData[field.name] = field.values?.[0] || "";
-          }
-
-          const source = leadData.adgroup_id
-            ? leadData.page_id
-              ? "Facebook"
-              : "Instagram"
-            : "Facebook";
-
-          await appendLead({
-            name: fieldData.full_name || fieldData.first_name || "",
-            phone: fieldData.phone_number
-              ? normalizePhone(fieldData.phone_number)
-              : "",
-            email: fieldData.email || "",
-            source,
-            status: "new",
-            createdAt: new Date().toISOString(),
-          });
-        }
-      }
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Facebook webhook error:", error);
-    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
-  }
+export async function POST() {
+  // Leads are ingested via Zapier into the Google Sheet directly.
+  // This endpoint is kept for potential future use.
+  return NextResponse.json({ success: true });
 }

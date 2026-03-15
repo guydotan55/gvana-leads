@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
           await sendCAPIEvent({
             eventName: trigger.capi_event,
             phone: lead.phone,
-            email: lead.email,
+            leadId: lead.leadId,
           });
         }
 

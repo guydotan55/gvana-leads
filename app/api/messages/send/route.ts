@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     sendCAPIEvent({
       eventName: "Lead",
       phone: lead.phone,
-      email: lead.email,
+      leadId: lead.leadId,
     }).catch((err) => console.error("CAPI Lead event failed:", err));
 
     return NextResponse.json({

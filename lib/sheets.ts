@@ -1,17 +1,32 @@
 import { google, sheets_v4 } from "googleapis";
 import columnsConfig from "@/config/columns.json";
 
+const VALID_STATUSES = ["new", "sent", "read", "qualified"];
+
 export interface Lead {
   row: number;
-  name: string;
+  // Facebook columns (read-only)
+  leadId: string;
+  createdTime: string;
+  adId: string;
+  adName: string;
+  adsetId: string;
+  adsetName: string;
+  campaignId: string;
+  campaignName: string;
+  formId: string;
+  formName: string;
+  isOrganic: string;
+  platform: string;
+  interest: string;
+  fullName: string;
   phone: string;
-  email: string;
-  source: string;
+  leadStatus: string;
+  // Dashboard columns (read-write)
   status: string;
   lastMessage: string;
   lastMessageDate: string;
   messageId: string;
-  createdAt: string;
   notes: string;
 }
 
@@ -38,20 +53,50 @@ function getSheets(): sheets_v4.Sheets {
   return google.sheets({ version: "v4", auth: getAuth() });
 }
 
+function isHeaderRow(row: string[]): boolean {
+  return row[0] === "id";
+}
+
+function stripLeadIdPrefix(value: string): string {
+  if (value.startsWith("l:")) return value.slice(2);
+  return value;
+}
+
+function stripPhonePrefix(value: string): string {
+  if (value.startsWith("p:")) return value.slice(2);
+  return value;
+}
+
 function rowToLead(row: string[], rowIndex: number): Lead {
-  const col = columnsConfig.columns;
+  const fb = columnsConfig.fbColumns;
+  const db = columnsConfig.dashboardColumns;
+
+  const rawStatus = row[db.status.index] || "";
+  const status = VALID_STATUSES.includes(rawStatus) ? rawStatus : "new";
+
   return {
     row: rowIndex,
-    name: row[col.name.index] || "",
-    phone: row[col.phone.index] || "",
-    email: row[col.email.index] || "",
-    source: row[col.source.index] || "",
-    status: row[col.status.index] || "new",
-    lastMessage: row[col.lastMessage.index] || "",
-    lastMessageDate: row[col.lastMessageDate.index] || "",
-    messageId: row[col.messageId.index] || "",
-    createdAt: row[col.createdAt.index] || "",
-    notes: row[col.notes.index] || "",
+    leadId: stripLeadIdPrefix(row[fb.leadId.index] || ""),
+    createdTime: row[fb.createdTime.index] || "",
+    adId: row[fb.adId.index] || "",
+    adName: row[fb.adName.index] || "",
+    adsetId: row[fb.adsetId.index] || "",
+    adsetName: row[fb.adsetName.index] || "",
+    campaignId: row[fb.campaignId.index] || "",
+    campaignName: row[fb.campaignName.index] || "",
+    formId: row[fb.formId.index] || "",
+    formName: row[fb.formName.index] || "",
+    isOrganic: row[fb.isOrganic.index] || "",
+    platform: row[fb.platform.index] || "",
+    interest: row[fb.interest.index] || "",
+    fullName: row[fb.fullName.index] || "",
+    phone: stripPhonePrefix(row[fb.phoneNumber.index] || ""),
+    leadStatus: row[fb.leadStatus.index] || "",
+    status,
+    lastMessage: row[db.lastMessage.index] || "",
+    lastMessageDate: row[db.lastMessageDate.index] || "",
+    messageId: row[db.messageId.index] || "",
+    notes: row[db.notes.index] || "",
   };
 }
 
@@ -61,22 +106,26 @@ export async function getLeads(): Promise<Lead[]> {
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: getSheetId(),
-    range: `${sheetName}!A2:Z`,
+    range: `${sheetName}!A1:V`,
   });
 
   const rows = response.data.values || [];
-  return rows.map((row, i) => rowToLead(row as string[], i + 2));
+  return rows
+    .map((row, i) => ({ row: row as string[], index: i + 1 }))
+    .filter(({ row }) => !isHeaderRow(row) && row[0]?.trim() !== "")
+    .map(({ row, index }) => rowToLead(row, index));
 }
+
+type DashboardColumnKey = keyof typeof columnsConfig.dashboardColumns;
 
 export async function updateLeadCell(
   row: number,
-  columnKey: keyof typeof columnsConfig.columns,
+  columnKey: DashboardColumnKey,
   value: string
 ): Promise<void> {
   const sheets = getSheets();
   const sheetName = columnsConfig.sheetName;
-  const colIndex = columnsConfig.columns[columnKey].index;
-  const colLetter = String.fromCharCode(65 + colIndex);
+  const colLetter = columnsConfig.dashboardColumns[columnKey].letter;
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: getSheetId(),
@@ -88,35 +137,10 @@ export async function updateLeadCell(
 
 export async function updateLeadCells(
   row: number,
-  updates: Partial<Record<keyof typeof columnsConfig.columns, string>>
+  updates: Partial<Record<DashboardColumnKey, string>>
 ): Promise<void> {
   const promises = Object.entries(updates).map(([key, value]) =>
-    updateLeadCell(row, key as keyof typeof columnsConfig.columns, value)
+    updateLeadCell(row, key as DashboardColumnKey, value!)
   );
   await Promise.all(promises);
-}
-
-export async function appendLead(
-  data: Partial<Record<keyof typeof columnsConfig.columns, string>>
-): Promise<void> {
-  const sheets = getSheets();
-  const sheetName = columnsConfig.sheetName;
-  const col = columnsConfig.columns;
-
-  const maxIndex = Math.max(...Object.values(col).map((c) => c.index));
-  const row = new Array(maxIndex + 1).fill("");
-
-  for (const [key, value] of Object.entries(data)) {
-    const colConfig = col[key as keyof typeof col];
-    if (colConfig && value) {
-      row[colConfig.index] = value;
-    }
-  }
-
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: getSheetId(),
-    range: `${sheetName}!A:Z`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: { values: [row] },
-  });
 }

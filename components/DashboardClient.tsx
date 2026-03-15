@@ -5,7 +5,6 @@ import StatsBar from "./StatsBar";
 import LeadTable from "./LeadTable";
 import SendMessageDialog from "./SendMessageDialog";
 import { t } from "@/lib/i18n";
-import { clientConfig } from "@/client.config";
 import type { Lead } from "@/lib/sheets";
 
 const POLL_INTERVAL = 30_000;
@@ -36,9 +35,9 @@ export default function DashboardClient() {
     return () => clearInterval(interval);
   }, [fetchLeads]);
 
-  const today = new Date().toLocaleDateString(clientConfig.locale === "he" ? "he-IL" : "en-US");
+  const todayISO = new Date().toISOString().slice(0, 10);
   const newToday = leads.filter(
-    (l) => l.status === "new" && l.createdAt?.includes(today)
+    (l) => l.status === "new" && l.createdTime?.startsWith(todayISO)
   ).length;
   const messagesSent = leads.filter((l) =>
     ["sent", "read", "qualified"].includes(l.status)

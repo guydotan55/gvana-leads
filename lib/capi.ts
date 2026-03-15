@@ -28,7 +28,7 @@ function sha256(value: string): string {
 interface CAPIEventParams {
   eventName: string;
   phone?: string;
-  email?: string;
+  leadId?: string;
   fbc?: string;
   fbp?: string;
   sourceUrl?: string;
@@ -41,7 +41,7 @@ export async function sendCAPIEvent(params: CAPIEventParams): Promise<boolean> {
 
   const userData: Record<string, unknown> = {};
   if (params.phone) userData.ph = [sha256(params.phone)];
-  if (params.email) userData.em = [sha256(params.email)];
+  if (params.leadId) userData.lead_id = params.leadId;
   if (params.fbc) userData.fbc = params.fbc;
   if (params.fbp) userData.fbp = params.fbp;
 
@@ -69,7 +69,7 @@ export async function sendCAPIEvent(params: CAPIEventParams): Promise<boolean> {
   }
 
   try {
-    const url = `https://graph.facebook.com/v18.0/${config.pixelId}/events?access_token=${config.accessToken}`;
+    const url = `https://graph.facebook.com/v21.0/${config.pixelId}/events?access_token=${config.accessToken}`;
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

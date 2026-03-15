@@ -1,15 +1,28 @@
 {
   "sheetName": "לידים",
-  "columns": {
-    "name": { "index": 0, "header": "שם מלא" },
-    "phone": { "index": 1, "header": "טלפון" },
-    "email": { "index": 2, "header": "אימייל" },
-    "source": { "index": 3, "header": "מקור" },
-    "status": { "index": 4, "header": "סטטוס" },
-    "lastMessage": { "index": 5, "header": "הודעה אחרונה" },
-    "lastMessageDate": { "index": 6, "header": "תאריך הודעה" },
-    "messageId": { "index": 7, "header": "מזהה הודעה" },
-    "createdAt": { "index": 8, "header": "תאריך יצירה" },
-    "notes": { "index": 9, "header": "הערות" }
+  "fbColumns": {
+    "leadId":       { "index": 0,  "letter": "A", "header": "id" },
+    "createdTime":  { "index": 1,  "letter": "B", "header": "created_time" },
+    "adId":         { "index": 2,  "letter": "C", "header": "ad_id" },
+    "adName":       { "index": 3,  "letter": "D", "header": "ad_name" },
+    "adsetId":      { "index": 4,  "letter": "E", "header": "adset_id" },
+    "adsetName":    { "index": 5,  "letter": "F", "header": "adset_name" },
+    "campaignId":   { "index": 6,  "letter": "G", "header": "campaign_id" },
+    "campaignName": { "index": 7,  "letter": "H", "header": "campaign_name" },
+    "formId":       { "index": 8,  "letter": "I", "header": "form_id" },
+    "formName":     { "index": 9,  "letter": "J", "header": "form_name" },
+    "isOrganic":    { "index": 10, "letter": "K", "header": "is_organic" },
+    "platform":     { "index": 11, "letter": "L", "header": "platform" },
+    "interest":     { "index": 12, "letter": "M", "header": "interest" },
+    "fullName":     { "index": 13, "letter": "N", "header": "full_name" },
+    "phoneNumber":  { "index": 14, "letter": "O", "header": "phone_number" },
+    "leadStatus":   { "index": 15, "letter": "P", "header": "lead_status" }
+  },
+  "dashboardColumns": {
+    "status":          { "index": 17, "letter": "R", "header": "סטטוס" },
+    "lastMessage":     { "index": 18, "letter": "S", "header": "הודעה אחרונה" },
+    "lastMessageDate": { "index": 19, "letter": "T", "header": "תאריך הודעה" },
+    "messageId":       { "index": 20, "letter": "U", "header": "מזהה הודעה" },
+    "notes":           { "index": 21, "letter": "V", "header": "הערות" }
   }
 }

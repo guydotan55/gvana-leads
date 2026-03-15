@@ -35,7 +35,10 @@ export async function POST(request: NextRequest) {
       sendCAPIEvent({
         eventName: "Purchase",
         phone: lead.phone,
-        email: lead.email,
+        leadId: lead.leadId,
+        customData: lead.campaignName
+          ? { campaign_name: lead.campaignName }
+          : undefined,
       }),
     ]);
 

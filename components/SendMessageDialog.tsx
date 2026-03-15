@@ -92,7 +92,7 @@ export default function SendMessageDialog({
       <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-brand-navy">
-            {t("actions.send")} — {lead.name}
+            {t("actions.send")} — {lead.fullName}
           </h2>
           <button
             onClick={onClose}

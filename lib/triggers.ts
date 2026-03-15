@@ -43,7 +43,7 @@ export async function findPendingTriggers(): Promise<PendingTrigger[]> {
       for (const lead of leads) {
         if (lead.messageId || lead.status !== "new") continue;
 
-        const createdAt = lead.createdAt ? new Date(lead.createdAt).getTime() : 0;
+        const createdAt = lead.createdTime ? new Date(lead.createdTime).getTime() : 0;
         if (createdAt === 0) continue;
 
         const minutesSinceCreation = (now - createdAt) / (1000 * 60);

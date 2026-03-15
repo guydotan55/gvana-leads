@@ -73,7 +73,7 @@ export default function LeadTable({ leads, onSendMessage, onQualify }: LeadTable
                 className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
               >
                 <td className="px-4 py-3">
-                  <span className="font-medium text-gray-900">{lead.name}</span>
+                  <span className="font-medium text-gray-900">{lead.fullName}</span>
                 </td>
                 <td className="px-4 py-3">
                   <span className="text-sm text-gray-600 font-mono" dir="ltr">
@@ -81,7 +81,7 @@ export default function LeadTable({ leads, onSendMessage, onQualify }: LeadTable
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <SourceBadge source={lead.source} />
+                  <SourceBadge source={lead.platform} />
                 </td>
                 <td className="px-4 py-3">
                   <StatusBadge statusKey={lead.status} />

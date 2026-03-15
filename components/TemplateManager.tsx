@@ -14,13 +14,18 @@ interface TemplateMappings {
   >;
 }
 
+const allColumns = {
+  ...columnsConfig.fbColumns,
+  ...columnsConfig.dashboardColumns,
+};
+
+const columnKeys = Object.keys(allColumns);
+
 export default function TemplateManager() {
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
   const [mappings, setMappings] = useState<TemplateMappings>({ mappings: {} });
   const [syncing, setSyncing] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
-
-  const columnKeys = Object.keys(columnsConfig.columns);
 
   useEffect(() => {
     fetchMappings();
@@ -82,8 +87,8 @@ export default function TemplateManager() {
       placeholders.forEach((p) => {
         const columnKey = mapping.placeholders[p];
         const header =
-          columnsConfig.columns[columnKey as keyof typeof columnsConfig.columns]
-            ?.header || `{{${p}}}`;
+          allColumns[columnKey as keyof typeof allColumns]?.header ||
+          `{{${p}}}`;
         text = text.replace(`{{${p}}}`, `[${header}]`);
       });
     }
@@ -177,9 +182,8 @@ export default function TemplateManager() {
                             {columnKeys.map((key) => (
                               <option key={key} value={key}>
                                 {
-                                  columnsConfig.columns[
-                                    key as keyof typeof columnsConfig.columns
-                                  ].header
+                                  allColumns[key as keyof typeof allColumns]
+                                    .header
                                 }
                               </option>
                             ))}
