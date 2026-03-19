@@ -2,17 +2,17 @@ import { t } from "@/lib/i18n";
 
 interface StatsBarProps {
   newToday: number;
-  messagesSent: number;
-  readReceipts: number;
-  qualified: number;
+  relevant: number;
+  notRelevant: number;
+  unavailable: number;
 }
 
-export default function StatsBar({ newToday, messagesSent, readReceipts, qualified }: StatsBarProps) {
+export default function StatsBar({ newToday, relevant, notRelevant, unavailable }: StatsBarProps) {
   const stats = [
     { label: t("stats.newToday"), value: newToday, color: "text-brand-orange" },
-    { label: t("stats.messagesSent"), value: messagesSent, color: "text-brand-sky" },
-    { label: t("stats.readReceipts"), value: readReceipts, color: "text-green-600" },
-    { label: t("stats.qualified"), value: qualified, color: "text-brand-orange" },
+    { label: t("stats.relevant"), value: relevant, color: "text-green-600" },
+    { label: t("stats.notRelevant"), value: notRelevant, color: "text-red-500" },
+    { label: t("stats.unavailable"), value: unavailable, color: "text-gray-500" },
   ];
 
   return (
