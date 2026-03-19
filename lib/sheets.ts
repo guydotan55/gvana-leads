@@ -1,7 +1,7 @@
 import { google, sheets_v4 } from "googleapis";
 import columnsConfig from "@/config/columns.json";
 
-const VALID_STATUSES = ["new", "sent", "read", "qualified"];
+export const VALID_STATUSES = ["new", "relevant", "not_relevant", "unavailable"];
 
 export interface Lead {
   row: number;
@@ -28,6 +28,7 @@ export interface Lead {
   lastMessageDate: string;
   messageId: string;
   notes: string;
+  attempts: number;
 }
 
 function getSheetId(): string {
@@ -97,6 +98,7 @@ function rowToLead(row: string[], rowIndex: number): Lead {
     lastMessageDate: row[db.lastMessageDate.index] || "",
     messageId: row[db.messageId.index] || "",
     notes: row[db.notes.index] || "",
+    attempts: parseInt(row[db.attempts.index] || "0", 10) || 0,
   };
 }
 
@@ -106,7 +108,7 @@ export async function getLeads(): Promise<Lead[]> {
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: getSheetId(),
-    range: `${sheetName}!A1:V`,
+    range: `${sheetName}!A1:W`,
   });
 
   const rows = response.data.values || [];

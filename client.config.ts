@@ -44,9 +44,9 @@ export const clientConfig: ClientConfig = {
   },
   statuses: [
     { key: "new", label: "חדש", color: "orange" },
-    { key: "sent", label: "נשלח", color: "blue" },
-    { key: "read", label: "נקרא", color: "green" },
-    { key: "qualified", label: "מוסמך", color: "red" },
+    { key: "relevant", label: "רלוונטי", color: "green" },
+    { key: "not_relevant", label: "לא רלוונטי", color: "red" },
+    { key: "unavailable", label: "לא זמין", color: "gray" },
   ],
   features: {
     triggers: true,
