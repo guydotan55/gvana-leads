@@ -8,7 +8,7 @@ export async function PATCH(
   try {
     const { row } = await params;
     const rowNum = parseInt(row, 10);
-    if (!rowNum || rowNum < 2) {
+    if (!rowNum || rowNum < 1) {
       return NextResponse.json({ error: "Invalid row" }, { status: 400 });
     }
 
