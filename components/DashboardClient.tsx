@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import StatsBar from "./StatsBar";
 import LeadTable from "./LeadTable";
-import SendMessageDialog from "./SendMessageDialog";
 import { t } from "@/lib/i18n";
 import type { Lead } from "@/lib/sheets";
 
@@ -13,9 +12,15 @@ export default function DashboardClient() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [sendingTo, setSendingTo] = useState<Lead | null>(null);
+  const [formFilter, setFormFilter] = useState("");
+  const [updateError, setUpdateError] = useState("");
+  const skipNextPoll = useRef(false);
 
   const fetchLeads = useCallback(async () => {
+    if (skipNextPoll.current) {
+      skipNextPoll.current = false;
+      return;
+    }
     try {
       const res = await fetch("/api/leads");
       if (!res.ok) throw new Error("Failed to fetch");
@@ -35,36 +40,45 @@ export default function DashboardClient() {
     return () => clearInterval(interval);
   }, [fetchLeads]);
 
+  async function handleStatusChange(lead: Lead, newStatus: string, attempts?: number) {
+    const prevLeads = leads;
+    // Optimistic update
+    setLeads((prev) =>
+      prev.map((l) =>
+        l.row === lead.row
+          ? { ...l, status: newStatus, attempts: attempts ?? l.attempts }
+          : l
+      )
+    );
+    skipNextPoll.current = true;
+
+    try {
+      const body: Record<string, unknown> = { status: newStatus };
+      if (newStatus === "unavailable" && typeof attempts === "number") {
+        body.attempts = attempts;
+      }
+      const res = await fetch(`/api/leads/${lead.row}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("Update failed");
+    } catch {
+      // Revert on failure and show brief error
+      setLeads(prevLeads);
+      skipNextPoll.current = false;
+      setUpdateError(t("common.error"));
+      setTimeout(() => setUpdateError(""), 3000);
+    }
+  }
+
   const todayISO = new Date().toISOString().slice(0, 10);
   const newToday = leads.filter(
     (l) => l.status === "new" && l.createdTime?.startsWith(todayISO)
   ).length;
-  const messagesSent = leads.filter((l) =>
-    ["sent", "read", "qualified"].includes(l.status)
-  ).length;
-  const readReceipts = leads.filter((l) =>
-    ["read", "qualified"].includes(l.status)
-  ).length;
-  const qualified = leads.filter((l) => l.status === "qualified").length;
-
-  function handleSendMessage(lead: Lead) {
-    setSendingTo(lead);
-  }
-
-  async function handleQualify(lead: Lead) {
-    try {
-      const res = await fetch("/api/leads/qualify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadRow: lead.row }),
-      });
-      if (res.ok) {
-        fetchLeads();
-      }
-    } catch (err) {
-      console.error("Qualify failed:", err);
-    }
-  }
+  const relevant = leads.filter((l) => l.status === "relevant").length;
+  const notRelevant = leads.filter((l) => l.status === "not_relevant").length;
+  const unavailable = leads.filter((l) => l.status === "unavailable").length;
 
   if (loading) {
     return (
@@ -90,24 +104,24 @@ export default function DashboardClient() {
 
   return (
     <div>
+      {updateError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {updateError}
+        </div>
+      )}
       <StatsBar
         newToday={newToday}
-        messagesSent={messagesSent}
-        readReceipts={readReceipts}
-        qualified={qualified}
+        relevant={relevant}
+        notRelevant={notRelevant}
+        unavailable={unavailable}
       />
       <LeadTable
-        leads={leads}
-        onSendMessage={handleSendMessage}
-        onQualify={handleQualify}
+        leads={formFilter ? leads.filter((l) => l.formName === formFilter) : leads}
+        allLeads={leads}
+        formFilter={formFilter}
+        onFormFilterChange={setFormFilter}
+        onStatusChange={handleStatusChange}
       />
-      {sendingTo && (
-        <SendMessageDialog
-          lead={sendingTo}
-          onClose={() => setSendingTo(null)}
-          onSent={fetchLeads}
-        />
-      )}
     </div>
   );
 }
