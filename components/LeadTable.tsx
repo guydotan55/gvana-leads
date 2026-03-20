@@ -19,6 +19,7 @@ const statusColorClasses: Record<string, string> = {
   red: "bg-red-100 text-red-700 border-red-200",
   gray: "bg-gray-100 text-gray-700 border-gray-200",
   blue: "bg-blue-100 text-blue-700 border-blue-200",
+  purple: "bg-purple-100 text-purple-700 border-purple-200",
 };
 
 function getStatusColor(statusKey: string): string {
@@ -75,7 +76,8 @@ function isInterviewStatus(status: string): boolean {
 }
 
 function getMainStatus(status: string): string {
-  return isInterviewStatus(status) ? "interviewed" : status;
+  // Interview statuses are sub-states of "relevant"
+  return isInterviewStatus(status) ? "relevant" : status;
 }
 
 function StatusSelect({
@@ -86,20 +88,20 @@ function StatusSelect({
   onStatusChange: (lead: Lead, status: string, attempts?: number, plan?: string) => void;
 }) {
   const mainStatus = getMainStatus(lead.status);
-  const showInterviewDropdown = mainStatus === "interviewed";
-  const interviewStatus = isInterviewStatus(lead.status) ? lead.status : "under_review";
+  const isRelevant = mainStatus === "relevant";
+  const interviewStatus = isInterviewStatus(lead.status) ? lead.status : "";
 
   function handleMainChange(newMain: string) {
-    if (newMain === "interviewed") {
-      // When selecting "הוזמן לריאיון", default to "בבדיקה"
-      onStatusChange(lead, "under_review");
-    } else {
-      onStatusChange(lead, newMain);
-    }
+    onStatusChange(lead, newMain);
   }
 
-  function handleInterviewChange(newInterview: string) {
-    onStatusChange(lead, newInterview);
+  function handleInterviewChange(value: string) {
+    if (value === "") {
+      // Going back to just "relevant"
+      onStatusChange(lead, "relevant");
+    } else {
+      onStatusChange(lead, value);
+    }
   }
 
   return (
@@ -129,12 +131,13 @@ function StatusSelect({
           </button>
         </div>
       )}
-      {showInterviewDropdown && (
+      {isRelevant && (
         <select
           value={interviewStatus}
           onChange={(e) => handleInterviewChange(e.target.value)}
-          className={`px-2 py-1 rounded-full text-xs font-medium border cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-sky/30 ${getStatusColor(interviewStatus)}`}
+          className={`px-2 py-1 rounded-full text-xs font-medium border cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-sky/30 ${interviewStatus ? getStatusColor(interviewStatus) : "bg-gray-50 text-gray-400 border-gray-200"}`}
         >
+          <option value="">— {t("status.interviewed")}</option>
           {clientConfig.interviewStatuses.map((s) => (
             <option key={s.key} value={s.key}>
               {s.label}

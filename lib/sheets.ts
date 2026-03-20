@@ -1,7 +1,7 @@
 import { google, sheets_v4 } from "googleapis";
 import columnsConfig from "@/config/columns.json";
 
-export const VALID_STATUSES = ["new", "relevant", "not_relevant", "unavailable", "interviewed", "under_review", "accepted", "rejected"];
+export const VALID_STATUSES = ["new", "relevant", "not_relevant", "unavailable", "under_review", "accepted", "rejected"];
 
 export interface Lead {
   row: number;
