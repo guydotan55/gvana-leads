@@ -22,7 +22,8 @@ const statusColorClasses: Record<string, string> = {
 };
 
 function getStatusColor(statusKey: string): string {
-  const status = clientConfig.statuses.find((s) => s.key === statusKey);
+  const status = clientConfig.statuses.find((s) => s.key === statusKey)
+    || clientConfig.interviewStatuses.find((s) => s.key === statusKey);
   return statusColorClasses[status?.color || "gray"] || statusColorClasses.gray;
 }
 
@@ -67,6 +68,16 @@ function formatDate(iso: string): string {
   }
 }
 
+const INTERVIEW_STATUSES = ["under_review", "accepted", "rejected"];
+
+function isInterviewStatus(status: string): boolean {
+  return INTERVIEW_STATUSES.includes(status);
+}
+
+function getMainStatus(status: string): string {
+  return isInterviewStatus(status) ? "interviewed" : status;
+}
+
 function StatusSelect({
   lead,
   onStatusChange,
@@ -74,12 +85,29 @@ function StatusSelect({
   lead: Lead;
   onStatusChange: (lead: Lead, status: string, attempts?: number, plan?: string) => void;
 }) {
+  const mainStatus = getMainStatus(lead.status);
+  const showInterviewDropdown = mainStatus === "interviewed";
+  const interviewStatus = isInterviewStatus(lead.status) ? lead.status : "under_review";
+
+  function handleMainChange(newMain: string) {
+    if (newMain === "interviewed") {
+      // When selecting "הוזמן לריאיון", default to "בבדיקה"
+      onStatusChange(lead, "under_review");
+    } else {
+      onStatusChange(lead, newMain);
+    }
+  }
+
+  function handleInterviewChange(newInterview: string) {
+    onStatusChange(lead, newInterview);
+  }
+
   return (
     <div className="flex flex-col gap-1">
       <select
-        value={lead.status}
-        onChange={(e) => onStatusChange(lead, e.target.value)}
-        className={`px-2 py-1 rounded-full text-xs font-medium border cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-sky/30 ${getStatusColor(lead.status)}`}
+        value={mainStatus}
+        onChange={(e) => handleMainChange(e.target.value)}
+        className={`px-2 py-1 rounded-full text-xs font-medium border cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-sky/30 ${getStatusColor(mainStatus)}`}
       >
         {clientConfig.statuses.map((s) => (
           <option key={s.key} value={s.key}>
@@ -101,19 +129,30 @@ function StatusSelect({
           </button>
         </div>
       )}
+      {showInterviewDropdown && (
+        <select
+          value={interviewStatus}
+          onChange={(e) => handleInterviewChange(e.target.value)}
+          className={`px-2 py-1 rounded-full text-xs font-medium border cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-sky/30 ${getStatusColor(interviewStatus)}`}
+        >
+          {clientConfig.interviewStatuses.map((s) => (
+            <option key={s.key} value={s.key}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      )}
       {lead.status === "accepted" && (
-        <div className="flex items-center gap-1 text-xs">
-          <select
-            value={lead.plan || ""}
-            onChange={(e) => onStatusChange(lead, "accepted", undefined, e.target.value)}
-            className="px-1.5 py-0.5 rounded text-xs border border-green-200 bg-green-50 text-green-700 cursor-pointer focus:outline-none"
-          >
-            <option value="">{t("leads.plan.select")}</option>
-            <option value="short">{t("leads.plan.short")}</option>
-            <option value="long">{t("leads.plan.long")}</option>
-            <option value="tech">{t("leads.plan.tech")}</option>
-          </select>
-        </div>
+        <select
+          value={lead.plan || ""}
+          onChange={(e) => onStatusChange(lead, "accepted", undefined, e.target.value)}
+          className="px-1.5 py-0.5 rounded text-xs border border-green-200 bg-green-50 text-green-700 cursor-pointer focus:outline-none"
+        >
+          <option value="">{t("leads.plan.select")}</option>
+          <option value="short">{t("leads.plan.short")}</option>
+          <option value="long">{t("leads.plan.long")}</option>
+          <option value="tech">{t("leads.plan.tech")}</option>
+        </select>
       )}
     </div>
   );

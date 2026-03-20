@@ -80,7 +80,7 @@ export default function DashboardClient() {
     (l) => l.status === "new" && l.createdTime?.startsWith(todayISO)
   ).length;
   const relevant = leads.filter((l) => l.status === "relevant").length;
-  const interviewed = leads.filter((l) => l.status === "interviewed").length;
+  const interviewed = leads.filter((l) => ["interviewed", "under_review", "accepted", "rejected"].includes(l.status)).length;
   const accepted = leads.filter((l) => l.status === "accepted").length;
 
   if (loading) {

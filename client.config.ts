@@ -16,6 +16,11 @@ export interface ClientConfig {
     label: string;
     color: "orange" | "blue" | "green" | "red" | "gray";
   }>;
+  interviewStatuses: Array<{
+    key: string;
+    label: string;
+    color: "orange" | "blue" | "green" | "red" | "gray";
+  }>;
   features: {
     triggers: boolean;
     capi: boolean;
@@ -48,6 +53,8 @@ export const clientConfig: ClientConfig = {
     { key: "not_relevant", label: "לא רלוונטי", color: "red" },
     { key: "unavailable", label: "לא זמין", color: "gray" },
     { key: "interviewed", label: "הוזמן לריאיון", color: "blue" },
+  ],
+  interviewStatuses: [
     { key: "under_review", label: "בבדיקה", color: "orange" },
     { key: "accepted", label: "התקבל", color: "green" },
     { key: "rejected", label: "נדחה", color: "red" },
