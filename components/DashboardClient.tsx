@@ -40,13 +40,13 @@ export default function DashboardClient() {
     return () => clearInterval(interval);
   }, [fetchLeads]);
 
-  async function handleStatusChange(lead: Lead, newStatus: string, attempts?: number) {
+  async function handleStatusChange(lead: Lead, newStatus: string, attempts?: number, plan?: string) {
     const prevLeads = leads;
     // Optimistic update
     setLeads((prev) =>
       prev.map((l) =>
         l.row === lead.row
-          ? { ...l, status: newStatus, attempts: attempts ?? l.attempts }
+          ? { ...l, status: newStatus, attempts: attempts ?? l.attempts, plan: plan ?? l.plan }
           : l
       )
     );
@@ -56,6 +56,9 @@ export default function DashboardClient() {
       const body: Record<string, unknown> = { status: newStatus };
       if (newStatus === "unavailable" && typeof attempts === "number") {
         body.attempts = attempts;
+      }
+      if (newStatus === "accepted" && plan) {
+        body.plan = plan;
       }
       const res = await fetch(`/api/leads/${lead.row}`, {
         method: "PATCH",
@@ -77,8 +80,8 @@ export default function DashboardClient() {
     (l) => l.status === "new" && l.createdTime?.startsWith(todayISO)
   ).length;
   const relevant = leads.filter((l) => l.status === "relevant").length;
-  const notRelevant = leads.filter((l) => l.status === "not_relevant").length;
-  const unavailable = leads.filter((l) => l.status === "unavailable").length;
+  const interviewed = leads.filter((l) => l.status === "interviewed").length;
+  const accepted = leads.filter((l) => l.status === "accepted").length;
 
   if (loading) {
     return (
@@ -112,8 +115,8 @@ export default function DashboardClient() {
       <StatsBar
         newToday={newToday}
         relevant={relevant}
-        notRelevant={notRelevant}
-        unavailable={unavailable}
+        interviewed={interviewed}
+        accepted={accepted}
       />
       <LeadTable
         leads={formFilter ? leads.filter((l) => l.formName === formFilter) : leads}

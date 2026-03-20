@@ -46,5 +46,16 @@
   "common.cancel": "ביטול",
   "common.confirm": "אישור",
   "common.search": "חיפוש",
-  "common.refresh": "רענן"
+  "common.refresh": "רענן",
+  "stats.interviewed": "הוזמנו לריאיון",
+  "stats.accepted": "התקבלו",
+  "status.interviewed": "הוזמן לריאיון",
+  "status.under_review": "בבדיקה",
+  "status.accepted": "התקבל",
+  "status.rejected": "נדחה",
+  "leads.plan": "תוכנית",
+  "leads.plan.short": "קצרה",
+  "leads.plan.long": "ארוכה",
+  "leads.plan.tech": "טכנולוגית",
+  "leads.plan.select": "בחר תוכנית"
 }

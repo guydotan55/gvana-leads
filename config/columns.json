@@ -24,6 +24,7 @@
     "lastMessageDate": { "index": 19, "letter": "T", "header": "תאריך הודעה" },
     "messageId":       { "index": 20, "letter": "U", "header": "מזהה הודעה" },
     "notes":           { "index": 21, "letter": "V", "header": "הערות" },
-    "attempts":        { "index": 22, "letter": "W", "header": "ניסיונות" }
+    "attempts":        { "index": 22, "letter": "W", "header": "ניסיונות" },
+    "plan":            { "index": 23, "letter": "X", "header": "תוכנית" }
   }
 }

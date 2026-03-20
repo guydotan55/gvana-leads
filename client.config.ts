@@ -47,6 +47,10 @@ export const clientConfig: ClientConfig = {
     { key: "relevant", label: "רלוונטי", color: "green" },
     { key: "not_relevant", label: "לא רלוונטי", color: "red" },
     { key: "unavailable", label: "לא זמין", color: "gray" },
+    { key: "interviewed", label: "הוזמן לריאיון", color: "blue" },
+    { key: "under_review", label: "בבדיקה", color: "orange" },
+    { key: "accepted", label: "התקבל", color: "green" },
+    { key: "rejected", label: "נדחה", color: "red" },
   ],
   features: {
     triggers: true,

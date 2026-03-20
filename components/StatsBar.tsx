@@ -3,16 +3,16 @@ import { t } from "@/lib/i18n";
 interface StatsBarProps {
   newToday: number;
   relevant: number;
-  notRelevant: number;
-  unavailable: number;
+  interviewed: number;
+  accepted: number;
 }
 
-export default function StatsBar({ newToday, relevant, notRelevant, unavailable }: StatsBarProps) {
+export default function StatsBar({ newToday, relevant, interviewed, accepted }: StatsBarProps) {
   const stats = [
     { label: t("stats.newToday"), value: newToday, color: "text-brand-orange" },
     { label: t("stats.relevant"), value: relevant, color: "text-green-600" },
-    { label: t("stats.notRelevant"), value: notRelevant, color: "text-red-500" },
-    { label: t("stats.unavailable"), value: unavailable, color: "text-gray-500" },
+    { label: t("stats.interviewed"), value: interviewed, color: "text-blue-500" },
+    { label: t("stats.accepted"), value: accepted, color: "text-green-600" },
   ];
 
   return (

@@ -46,5 +46,16 @@
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",
   "common.search": "Search",
-  "common.refresh": "Refresh"
+  "common.refresh": "Refresh",
+  "stats.interviewed": "Interviewed",
+  "stats.accepted": "Accepted",
+  "status.interviewed": "Invited to Interview",
+  "status.under_review": "Under Review",
+  "status.accepted": "Accepted",
+  "status.rejected": "Rejected",
+  "leads.plan": "Plan",
+  "leads.plan.short": "Short",
+  "leads.plan.long": "Long",
+  "leads.plan.tech": "Technological",
+  "leads.plan.select": "Select Plan"
 }
