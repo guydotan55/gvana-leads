@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
           sender: trigger.sender === "default" ? undefined : trigger.sender,
         });
 
-        await updateLeadCells(lead.row, {
+        await updateLeadCells(lead.sheetTab, lead.row, {
           status: "sent",
           messageId: sendResult.messageId,
           lastMessage: trigger.template,

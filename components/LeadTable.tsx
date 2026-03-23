@@ -227,7 +227,7 @@ export default function LeadTable({
               <tbody>
                 {leads.map((lead) => (
                   <tr
-                    key={lead.row}
+                    key={`${lead.sheetTab}:${lead.row}`}
                     className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
                   >
                     <td className="px-4 py-3">

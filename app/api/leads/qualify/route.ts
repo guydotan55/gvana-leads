@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     }
 
     const results = await Promise.allSettled([
-      updateLeadCells(lead.row, {
+      updateLeadCells(lead.sheetTab, lead.row, {
         status: "qualified",
       }),
 

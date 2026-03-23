@@ -45,7 +45,7 @@ export default function DashboardClient() {
     // Optimistic update
     setLeads((prev) =>
       prev.map((l) =>
-        l.row === lead.row
+        l.row === lead.row && l.sheetTab === lead.sheetTab
           ? { ...l, status: newStatus, attempts: attempts ?? l.attempts, plan: plan ?? l.plan }
           : l
       )
@@ -53,7 +53,7 @@ export default function DashboardClient() {
     skipNextPoll.current = true;
 
     try {
-      const body: Record<string, unknown> = { status: newStatus };
+      const body: Record<string, unknown> = { status: newStatus, sheetTab: lead.sheetTab };
       if (newStatus === "unavailable" && typeof attempts === "number") {
         body.attempts = attempts;
       }

@@ -5,6 +5,7 @@ export const VALID_STATUSES = ["new", "relevant", "not_relevant", "unavailable",
 
 export interface Lead {
   row: number;
+  sheetTab: string;
   // Facebook columns (read-only)
   leadId: string;
   createdTime: string;
@@ -32,6 +33,41 @@ export interface Lead {
   plan: string;
 }
 
+/* ---------- Header alias map for dynamic column detection ---------- */
+
+const HEADER_ALIASES: Record<string, string[]> = {
+  leadId: ["id"],
+  createdTime: ["created_time"],
+  adId: ["ad_id"],
+  adName: ["ad_name"],
+  adsetId: ["adset_id"],
+  adsetName: ["adset_name"],
+  campaignId: ["campaign_id"],
+  campaignName: ["campaign_name"],
+  formId: ["form_id"],
+  formName: ["form_name"],
+  isOrganic: ["is_organic"],
+  platform: ["platform"],
+  interest: ["interest"],
+  fullName: ["full_name", "שם_מלא"],
+  phone: ["phone_number", "phone"],
+  leadStatus: ["lead_status"],
+};
+
+/** Known header names used to detect whether the first row is a header row */
+const KNOWN_HEADERS = ["id", "created_time", "ad_id", "form_id", "lead_status"];
+
+function buildColumnMap(headers: string[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
+    const idx = headers.findIndex((h) => aliases.includes(h));
+    if (idx !== -1) map[field] = idx;
+  }
+  return map;
+}
+
+/* ---------- Helpers ---------- */
+
 function getSheetId(): string {
   const id = process.env.GOOGLE_SHEET_ID;
   if (!id) throw new Error("GOOGLE_SHEET_ID env var is required");
@@ -55,10 +91,6 @@ function getSheets(): sheets_v4.Sheets {
   return google.sheets({ version: "v4", auth: getAuth() });
 }
 
-function isHeaderRow(row: string[]): boolean {
-  return row[0] === "id";
-}
-
 function stripLeadIdPrefix(value: string): string {
   if (value.startsWith("l:")) return value.slice(2);
   return value;
@@ -69,82 +101,167 @@ function stripPhonePrefix(value: string): string {
   return value;
 }
 
-function rowToLead(row: string[], rowIndex: number): Lead {
-  const fb = columnsConfig.fbColumns;
-  const db = columnsConfig.dashboardColumns;
+/* ---------- Row-to-Lead conversion ---------- */
 
-  const rawStatus = row[db.status.index] || "";
+function rowToLeadDynamic(
+  row: string[],
+  rowIndex: number,
+  sheetTab: string,
+  colMap: Record<string, number>
+): Lead {
+  const get = (field: string) => row[colMap[field] ?? -1] || "";
+
+  const rawStatus = colMap.status !== undefined ? row[colMap.status] || "" : "";
   const status = VALID_STATUSES.includes(rawStatus) ? rawStatus : "new";
 
   return {
     row: rowIndex,
-    leadId: stripLeadIdPrefix(row[fb.leadId.index] || ""),
-    createdTime: row[fb.createdTime.index] || "",
-    adId: row[fb.adId.index] || "",
-    adName: row[fb.adName.index] || "",
-    adsetId: row[fb.adsetId.index] || "",
-    adsetName: row[fb.adsetName.index] || "",
-    campaignId: row[fb.campaignId.index] || "",
-    campaignName: row[fb.campaignName.index] || "",
-    formId: row[fb.formId.index] || "",
-    formName: row[fb.formName.index] || "",
-    isOrganic: row[fb.isOrganic.index] || "",
-    platform: row[fb.platform.index] || "",
-    interest: row[fb.interest.index] || "",
-    fullName: row[fb.fullName.index] || "",
-    phone: stripPhonePrefix(row[fb.phoneNumber.index] || ""),
-    leadStatus: row[fb.leadStatus.index] || "",
+    sheetTab,
+    leadId: stripLeadIdPrefix(get("leadId")),
+    createdTime: get("createdTime"),
+    adId: get("adId"),
+    adName: get("adName"),
+    adsetId: get("adsetId"),
+    adsetName: get("adsetName"),
+    campaignId: get("campaignId"),
+    campaignName: get("campaignName"),
+    formId: get("formId"),
+    formName: get("formName"),
+    isOrganic: get("isOrganic"),
+    platform: get("platform"),
+    interest: get("interest") || "",
+    fullName: get("fullName"),
+    phone: stripPhonePrefix(get("phone")),
+    leadStatus: get("leadStatus"),
     status,
-    lastMessage: row[db.lastMessage.index] || "",
-    lastMessageDate: row[db.lastMessageDate.index] || "",
-    messageId: row[db.messageId.index] || "",
-    notes: row[db.notes.index] || "",
-    attempts: parseInt(row[db.attempts.index] || "0", 10) || 0,
-    plan: row[db.plan.index] || "",
+    lastMessage: get("lastMessage") || "",
+    lastMessageDate: get("lastMessageDate") || "",
+    messageId: get("messageId") || "",
+    notes: get("notes") || "",
+    attempts: parseInt(get("attempts") || "0", 10) || 0,
+    plan: get("plan") || "",
   };
 }
 
+/** Build a column map from the fixed config (for the header-less "לידים" tab) */
+function buildFixedColumnMap(): Record<string, number> {
+  const fb = columnsConfig.fbColumns;
+  const db = columnsConfig.dashboardColumns;
+  return {
+    leadId: fb.leadId.index,
+    createdTime: fb.createdTime.index,
+    adId: fb.adId.index,
+    adName: fb.adName.index,
+    adsetId: fb.adsetId.index,
+    adsetName: fb.adsetName.index,
+    campaignId: fb.campaignId.index,
+    campaignName: fb.campaignName.index,
+    formId: fb.formId.index,
+    formName: fb.formName.index,
+    isOrganic: fb.isOrganic.index,
+    platform: fb.platform.index,
+    interest: fb.interest.index,
+    fullName: fb.fullName.index,
+    phone: fb.phoneNumber.index,
+    leadStatus: fb.leadStatus.index,
+    status: db.status.index,
+    lastMessage: db.lastMessage.index,
+    lastMessageDate: db.lastMessageDate.index,
+    messageId: db.messageId.index,
+    notes: db.notes.index,
+    attempts: db.attempts.index,
+    plan: db.plan.index,
+  };
+}
+
+/* ---------- Public API ---------- */
+
 export async function getLeads(): Promise<Lead[]> {
   const sheets = getSheets();
-  const sheetName = columnsConfig.sheetName;
+  const spreadsheetId = getSheetId();
+  const defaultSheetName = columnsConfig.sheetName; // "לידים"
 
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: getSheetId(),
-    range: `${sheetName}!A1:X`,
+  // Get all tab names
+  const meta = await sheets.spreadsheets.get({ spreadsheetId });
+  const tabNames = (
+    meta.data.sheets?.map((s) => s.properties?.title).filter(Boolean) as string[]
+  ) || [];
+
+  const allLeads: Lead[] = [];
+
+  for (const tabName of tabNames) {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${tabName}'!A1:X`,
+    });
+
+    const rows = response.data.values || [];
+    if (rows.length === 0) continue;
+
+    // Check if first row is a header row
+    const firstRow = rows[0];
+    const hasHeaders = firstRow.some((cell: string) =>
+      KNOWN_HEADERS.includes(cell)
+    );
+
+    if (hasHeaders) {
+      // Dynamic mapping from headers
+      const colMap = buildColumnMap(firstRow);
+      // Process data rows (skip header)
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i] as string[];
+        if (!row[0]?.trim() || row[0] === "id") continue; // skip empty and duplicate headers
+        allLeads.push(rowToLeadDynamic(row, i + 1, tabName, colMap));
+      }
+    } else if (tabName === defaultSheetName) {
+      // Fixed mapping for the "לידים" tab (no headers)
+      const colMap = buildFixedColumnMap();
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i] as string[];
+        if (!row[0]?.trim() || row[0] === "id" || row[0] === "ad_name") continue;
+        allLeads.push(rowToLeadDynamic(row, i + 1, tabName, colMap));
+      }
+    }
+    // Skip tabs that have no headers and aren't the default tab
+  }
+
+  // Sort by createdTime descending (newest first)
+  allLeads.sort((a, b) => {
+    if (!a.createdTime && !b.createdTime) return 0;
+    if (!a.createdTime) return 1;
+    if (!b.createdTime) return -1;
+    return b.createdTime.localeCompare(a.createdTime);
   });
 
-  const rows = response.data.values || [];
-  return rows
-    .map((row, i) => ({ row: row as string[], index: i + 1 }))
-    .filter(({ row }) => !isHeaderRow(row) && row[0]?.trim() !== "")
-    .map(({ row, index }) => rowToLead(row, index));
+  return allLeads;
 }
 
 type DashboardColumnKey = keyof typeof columnsConfig.dashboardColumns;
 
 export async function updateLeadCell(
+  sheetTab: string,
   row: number,
   columnKey: DashboardColumnKey,
   value: string
 ): Promise<void> {
   const sheets = getSheets();
-  const sheetName = columnsConfig.sheetName;
   const colLetter = columnsConfig.dashboardColumns[columnKey].letter;
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: getSheetId(),
-    range: `${sheetName}!${colLetter}${row}`,
+    range: `'${sheetTab}'!${colLetter}${row}`,
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [[value]] },
   });
 }
 
 export async function updateLeadCells(
+  sheetTab: string,
   row: number,
   updates: Partial<Record<DashboardColumnKey, string>>
 ): Promise<void> {
   const promises = Object.entries(updates).map(([key, value]) =>
-    updateLeadCell(row, key as DashboardColumnKey, value!)
+    updateLeadCell(sheetTab, row, key as DashboardColumnKey, value!)
   );
   await Promise.all(promises);
 }

@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     });
 
     const now = new Date().toISOString();
-    await updateLeadCells(lead.row, {
+    await updateLeadCells(lead.sheetTab, lead.row, {
       status: "sent",
       messageId: result.messageId,
       lastMessage: templateName,

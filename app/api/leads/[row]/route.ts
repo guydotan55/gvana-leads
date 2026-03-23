@@ -12,7 +12,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid row" }, { status: 400 });
     }
 
-    const { status, attempts, plan } = await request.json();
+    const { status, attempts, plan, sheetTab } = await request.json();
 
     if (!status || !VALID_STATUSES.includes(status)) {
       return NextResponse.json(
@@ -23,7 +23,7 @@ export async function PATCH(
 
     // Verify lead exists
     const leads = await getLeads();
-    const lead = leads.find((l) => l.row === rowNum);
+    const lead = leads.find((l) => l.row === rowNum && (!sheetTab || l.sheetTab === sheetTab));
     if (!lead) {
       return NextResponse.json({ error: "Lead not found" }, { status: 404 });
     }
@@ -38,7 +38,7 @@ export async function PATCH(
       updates.plan = plan;
     }
 
-    await updateLeadCells(rowNum, updates);
+    await updateLeadCells(lead.sheetTab, rowNum, updates);
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (newStatus && newStatus !== lead.status) {
-        await updateLeadCell(lead.row, "status", newStatus);
+        await updateLeadCell(lead.sheetTab, lead.row, "status", newStatus);
       }
     }
 
