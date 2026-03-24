@@ -9,9 +9,10 @@ import type { Lead } from "@/lib/sheets";
 const POLL_INTERVAL = 30_000;
 
 function getLeadType(lead: Lead): "student" | "instructor" {
-  const name = (lead.formName || "").toLowerCase();
-  const tab = (lead.sheetTab || "").toLowerCase();
-  if (name.includes("מדריך") || tab.includes("מדריך")) return "instructor";
+  const name = lead.formName || "";
+  const tab = lead.sheetTab || "";
+  const combined = name + tab;
+  if (combined.includes("מדריך") || combined.includes("מדריכ")) return "instructor";
   return "student";
 }
 
