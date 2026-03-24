@@ -67,6 +67,64 @@ function formatDate(iso: string): string {
   }
 }
 
+/* ---------- Notes / Form Answers ---------- */
+
+function parseNotes(notes: string): { label: string; value: string }[] {
+  if (!notes?.trim()) return [];
+  return notes
+    .split("\n")
+    .map((line) => {
+      const colonIdx = line.indexOf(":");
+      if (colonIdx === -1) return null;
+      const label = line.slice(0, colonIdx).trim();
+      const value = line.slice(colonIdx + 1).trim();
+      if (!label || !value) return null;
+      return { label, value };
+    })
+    .filter(Boolean) as { label: string; value: string }[];
+}
+
+function NotesExpander({ notes }: { notes: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const parsed = parseNotes(notes);
+
+  if (parsed.length === 0) return null;
+
+  return (
+    <div>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 py-1.5 px-2 rounded-lg hover:bg-blue-50 transition-colors min-h-[32px]"
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ transform: expanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+        {expanded ? t("leads.hideAnswers") : t("leads.showAnswers")}
+      </button>
+      {expanded && (
+        <div className="mt-2 space-y-2 animate-fadeIn">
+          {parsed.map((item, i) => (
+            <div key={i} className="bg-gray-50 rounded-lg p-3">
+              <p className="text-xs font-semibold text-gray-500 mb-1">{item.label}</p>
+              <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{item.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---------- Handled By ---------- */
 
 const HANDLED_BY_OPTIONS = ["נדב", "תמר"];
@@ -356,7 +414,96 @@ function LeadCard({
         <p className="text-xs text-gray-400 mb-1">{t("leads.table.handledBy")}</p>
         <HandledBySelect lead={lead} onChange={onHandledByChange} />
       </div>
+      {lead.notes && (
+        <div className="pt-1 border-t border-gray-50">
+          <NotesExpander notes={lead.notes} />
+        </div>
+      )}
     </div>
+  );
+}
+
+/* ---------- Desktop Lead Row ---------- */
+
+function DesktopLeadRow({
+  lead,
+  onStatusChange,
+  onHandledByChange,
+}: {
+  lead: Lead;
+  onStatusChange: (lead: Lead, status: string, attempts?: number, plan?: string) => void;
+  onHandledByChange: (lead: Lead, handledBy: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const hasNotes = !!lead.notes?.trim();
+  const parsed = hasNotes ? parseNotes(lead.notes) : [];
+
+  return (
+    <>
+      <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+        <td className="px-3 py-3">
+          <div className="flex items-center gap-1.5">
+            <span className="font-medium text-gray-900 text-sm">
+              {lead.fullName}
+            </span>
+            {hasNotes && parsed.length > 0 && (
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="flex items-center gap-0.5 text-xs text-blue-600 hover:text-blue-700 px-1.5 py-0.5 rounded hover:bg-blue-50 transition-colors"
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ transform: expanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+                {expanded ? t("leads.hideAnswers") : t("leads.showAnswers")}
+              </button>
+            )}
+          </div>
+        </td>
+        <td className="px-3 py-3">
+          <span className="text-sm text-gray-600 font-mono" dir="ltr">
+            {lead.phone}
+          </span>
+        </td>
+        <td className="px-3 py-3">
+          <span className="text-sm text-gray-500 whitespace-nowrap" dir="ltr">
+            {formatDate(lead.createdTime)}
+          </span>
+        </td>
+        <td className="px-3 py-3">
+          <StatusSelect lead={lead} onStatusChange={onStatusChange} />
+        </td>
+        <td className="px-3 py-3">
+          <HandledBySelect lead={lead} onChange={onHandledByChange} />
+        </td>
+        <td className="px-3 py-3">
+          <SourceBadge source={lead.platform} />
+        </td>
+      </tr>
+      {expanded && parsed.length > 0 && (
+        <tr className="bg-blue-50/30">
+          <td colSpan={6} className="px-4 py-3">
+            <div className="grid grid-cols-2 gap-3">
+              {parsed.map((item, i) => (
+                <div key={i} className="bg-white rounded-lg p-3 border border-gray-100">
+                  <p className="text-xs font-semibold text-gray-400 mb-1">{item.label}</p>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{item.value}</p>
+                </div>
+              ))}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -426,41 +573,12 @@ export default function LeadTable({
                 </thead>
                 <tbody>
                   {sortedLeads.map((lead) => (
-                    <tr
+                    <DesktopLeadRow
                       key={`${lead.sheetTab}:${lead.row}`}
-                      className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
-                    >
-                      <td className="px-3 py-3">
-                        <span className="font-medium text-gray-900 text-sm">
-                          {lead.fullName}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className="text-sm text-gray-600 font-mono" dir="ltr">
-                          {lead.phone}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className="text-sm text-gray-500 whitespace-nowrap" dir="ltr">
-                          {formatDate(lead.createdTime)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3">
-                        <StatusSelect
-                          lead={lead}
-                          onStatusChange={onStatusChange}
-                        />
-                      </td>
-                      <td className="px-3 py-3">
-                        <HandledBySelect
-                          lead={lead}
-                          onChange={onHandledByChange}
-                        />
-                      </td>
-                      <td className="px-3 py-3">
-                        <SourceBadge source={lead.platform} />
-                      </td>
-                    </tr>
+                      lead={lead}
+                      onStatusChange={onStatusChange}
+                      onHandledByChange={onHandledByChange}
+                    />
                   ))}
                 </tbody>
               </table>

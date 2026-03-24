@@ -69,5 +69,7 @@
   "leads.filter.allSources": "הכל",
   "leads.filter.facebook": "פייסבוק",
   "leads.filter.organic": "אורגני",
-  "leads.filter.website": "אתר"
+  "leads.filter.website": "אתר",
+  "leads.showAnswers": "הצג תשובות",
+  "leads.hideAnswers": "הסתר תשובות"
 }

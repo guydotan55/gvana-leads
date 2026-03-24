@@ -69,5 +69,7 @@
   "leads.filter.allSources": "All",
   "leads.filter.facebook": "Facebook",
   "leads.filter.organic": "Organic",
-  "leads.filter.website": "Website"
+  "leads.filter.website": "Website",
+  "leads.showAnswers": "Show Answers",
+  "leads.hideAnswers": "Hide Answers"
 }
