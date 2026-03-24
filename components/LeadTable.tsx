@@ -69,6 +69,47 @@ function formatDate(iso: string): string {
   }
 }
 
+const PLAN_OPTIONS = [
+  { key: "short", label: t("leads.plan.short") },
+  { key: "long", label: t("leads.plan.long") },
+  { key: "tech", label: t("leads.plan.tech") },
+];
+
+function PlanMultiSelect({
+  selectedPlans,
+  onChange,
+}: {
+  selectedPlans: string;
+  onChange: (plans: string) => void;
+}) {
+  const selected = selectedPlans ? selectedPlans.split(",") : [];
+
+  function toggle(plan: string) {
+    const newSelected = selected.includes(plan)
+      ? selected.filter((p) => p !== plan)
+      : [...selected, plan];
+    onChange(newSelected.join(","));
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {PLAN_OPTIONS.map((opt) => (
+        <button
+          key={opt.key}
+          onClick={() => toggle(opt.key)}
+          className={`px-2 py-0.5 rounded-full text-xs font-medium border transition-colors ${
+            selected.includes(opt.key)
+              ? "bg-blue-100 text-blue-700 border-blue-300"
+              : "bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100"
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const INTERVIEW_STATUSES = ["under_review", "accepted", "rejected"];
 
 function isInterviewStatus(status: string): boolean {
@@ -161,17 +202,11 @@ function StatusSelect({
           ))}
         </select>
       )}
-      {lead.status === "accepted" && (
-        <select
-          value={lead.plan || ""}
-          onChange={(e) => onStatusChange(lead, "accepted", undefined, e.target.value)}
-          className="px-1.5 py-0.5 rounded text-xs border border-green-200 bg-green-50 text-green-700 cursor-pointer focus:outline-none"
-        >
-          <option value="">{t("leads.plan.select")}</option>
-          <option value="short">{t("leads.plan.short")}</option>
-          <option value="long">{t("leads.plan.long")}</option>
-          <option value="tech">{t("leads.plan.tech")}</option>
-        </select>
+      {(lead.status === "under_review" || lead.status === "accepted") && (
+        <PlanMultiSelect
+          selectedPlans={lead.plan || ""}
+          onChange={(newPlan) => onStatusChange(lead, lead.status, undefined, newPlan)}
+        />
       )}
     </div>
   );

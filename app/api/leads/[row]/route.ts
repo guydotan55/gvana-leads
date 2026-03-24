@@ -30,11 +30,11 @@ export async function PATCH(
 
     const updates: Record<string, string> = { status };
 
-    if (status === "unavailable" && typeof attempts === "number" && attempts >= 0) {
+    if (typeof attempts === "number" && attempts >= 0) {
       updates.attempts = String(attempts);
     }
 
-    if (status === "accepted" && typeof plan === "string" && plan) {
+    if ((status === "under_review" || status === "accepted") && typeof plan === "string") {
       updates.plan = plan;
     }
 

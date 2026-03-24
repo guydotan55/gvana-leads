@@ -57,7 +57,7 @@ export default function DashboardClient() {
       if (newStatus === "unavailable" && typeof attempts === "number") {
         body.attempts = attempts;
       }
-      if (newStatus === "accepted" && plan) {
+      if ((newStatus === "under_review" || newStatus === "accepted") && typeof plan === "string") {
         body.plan = plan;
       }
       const res = await fetch(`/api/leads/${lead.row}`, {
