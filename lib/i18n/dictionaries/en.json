@@ -60,5 +60,14 @@
   "leads.plan.select": "Select Plan",
   "leads.table.handledBy": "Handled By",
   "leads.handledBy.select": "— Select —",
-  "leads.handledBy.other": "Other..."
+  "leads.handledBy.other": "Other...",
+  "leads.filter.leadType": "Lead Type",
+  "leads.filter.allTypes": "All",
+  "leads.filter.students": "Students",
+  "leads.filter.instructors": "Instructors",
+  "leads.filter.source": "Source",
+  "leads.filter.allSources": "All",
+  "leads.filter.facebook": "Facebook",
+  "leads.filter.organic": "Organic",
+  "leads.filter.website": "Website"
 }

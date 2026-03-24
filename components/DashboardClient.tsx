@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import StatsBar from "./StatsBar";
 import LeadTable from "./LeadTable";
 import { t } from "@/lib/i18n";
@@ -8,11 +8,26 @@ import type { Lead } from "@/lib/sheets";
 
 const POLL_INTERVAL = 30_000;
 
+function getLeadType(lead: Lead): "student" | "instructor" {
+  const name = (lead.formName || "").toLowerCase();
+  const tab = (lead.sheetTab || "").toLowerCase();
+  if (name.includes("מדריך") || tab.includes("מדריך")) return "instructor";
+  return "student";
+}
+
+function getLeadSource(lead: Lead): "facebook" | "organic" | "website" {
+  const p = (lead.platform || "").toLowerCase();
+  if (p === "organic") return "organic";
+  if (p === "website") return "website";
+  return "facebook";
+}
+
 export default function DashboardClient() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [formFilter, setFormFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
   const [updateError, setUpdateError] = useState("");
   const skipNextPoll = useRef(false);
 
@@ -42,7 +57,6 @@ export default function DashboardClient() {
 
   async function handleStatusChange(lead: Lead, newStatus: string, attempts?: number, plan?: string) {
     const prevLeads = leads;
-    // Optimistic update
     setLeads((prev) =>
       prev.map((l) =>
         l.row === lead.row && l.sheetTab === lead.sheetTab
@@ -67,7 +81,6 @@ export default function DashboardClient() {
       });
       if (!res.ok) throw new Error("Update failed");
     } catch {
-      // Revert on failure and show brief error
       setLeads(prevLeads);
       skipNextPoll.current = false;
       setUpdateError(t("common.error"));
@@ -101,6 +114,14 @@ export default function DashboardClient() {
     }
   }
 
+  const filteredLeads = useMemo(() => {
+    return leads.filter((l) => {
+      if (typeFilter && getLeadType(l) !== typeFilter) return false;
+      if (sourceFilter && getLeadSource(l) !== sourceFilter) return false;
+      return true;
+    });
+  }, [leads, typeFilter, sourceFilter]);
+
   const todayISO = new Date().toISOString().slice(0, 10);
   const newToday = leads.filter(
     (l) => l.status === "new" && l.createdTime?.startsWith(todayISO)
@@ -131,6 +152,8 @@ export default function DashboardClient() {
     );
   }
 
+  const filterClass = "px-3 py-2.5 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-sky/30 focus:border-brand-sky min-h-[40px]";
+
   return (
     <div>
       {updateError && (
@@ -144,11 +167,30 @@ export default function DashboardClient() {
         interviewed={interviewed}
         accepted={accepted}
       />
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 mb-4">
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className={filterClass}
+        >
+          <option value="">{t("leads.filter.leadType")}: {t("leads.filter.allTypes")}</option>
+          <option value="student">{t("leads.filter.students")}</option>
+          <option value="instructor">{t("leads.filter.instructors")}</option>
+        </select>
+        <select
+          value={sourceFilter}
+          onChange={(e) => setSourceFilter(e.target.value)}
+          className={filterClass}
+        >
+          <option value="">{t("leads.filter.source")}: {t("leads.filter.allSources")}</option>
+          <option value="facebook">{t("leads.filter.facebook")}</option>
+          <option value="organic">{t("leads.filter.organic")}</option>
+          <option value="website">{t("leads.filter.website")}</option>
+        </select>
+      </div>
       <LeadTable
-        leads={formFilter ? leads.filter((l) => l.formName === formFilter) : leads}
-        allLeads={leads}
-        formFilter={formFilter}
-        onFormFilterChange={setFormFilter}
+        leads={filteredLeads}
         onStatusChange={handleStatusChange}
         onHandledByChange={handleHandledByChange}
       />

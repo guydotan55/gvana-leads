@@ -7,9 +7,6 @@ import type { Lead } from "@/lib/sheets";
 
 interface LeadTableProps {
   leads: Lead[];
-  allLeads: Lead[];
-  formFilter: string;
-  onFormFilterChange: (form: string) => void;
   onStatusChange: (lead: Lead, status: string, attempts?: number, plan?: string) => void;
   onHandledByChange: (lead: Lead, handledBy: string) => void;
 }
@@ -367,22 +364,11 @@ function LeadCard({
 
 export default function LeadTable({
   leads,
-  allLeads,
-  formFilter,
-  onFormFilterChange,
   onStatusChange,
   onHandledByChange,
 }: LeadTableProps) {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-
-  const formNames = useMemo(() => {
-    const names = new Set<string>();
-    allLeads.forEach((l) => {
-      if (l.formName?.trim()) names.add(l.formName);
-    });
-    return Array.from(names).sort();
-  }, [allLeads]);
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -406,24 +392,6 @@ export default function LeadTable({
 
   return (
     <div>
-      {/* Form filter */}
-      {formNames.length > 0 && (
-        <div className="mb-4">
-          <select
-            value={formFilter}
-            onChange={(e) => onFormFilterChange(e.target.value)}
-            className="px-3 py-2.5 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-sky/30 focus:border-brand-sky min-h-[40px]"
-          >
-            <option value="">{t("leads.filter.allForms")}</option>
-            {formNames.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
       {sortedLeads.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
           <p className="text-gray-400">{t("leads.table.empty")}</p>

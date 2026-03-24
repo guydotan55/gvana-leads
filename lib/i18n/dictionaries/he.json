@@ -60,5 +60,14 @@
   "leads.plan.select": "בחר תוכנית",
   "leads.table.handledBy": "טופל ע\"י",
   "leads.handledBy.select": "— בחר —",
-  "leads.handledBy.other": "אחר..."
+  "leads.handledBy.other": "אחר...",
+  "leads.filter.leadType": "סוג ליד",
+  "leads.filter.allTypes": "הכל",
+  "leads.filter.students": "חניכים",
+  "leads.filter.instructors": "מדריכים",
+  "leads.filter.source": "מקור",
+  "leads.filter.allSources": "הכל",
+  "leads.filter.facebook": "פייסבוק",
+  "leads.filter.organic": "אורגני",
+  "leads.filter.website": "אתר"
 }
