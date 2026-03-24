@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
 
+const ORGANIC_TAB = "אורגני";
+
+const HEADERS = [
+  "id", "created_time", "ad_id", "ad_name", "adset_id", "adset_name",
+  "campaign_id", "campaign_name", "form_id", "form_name", "is_organic",
+  "platform", "interest", "full_name", "phone_number", "lead_status",
+];
+
 function getAuth() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const key = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
@@ -10,6 +18,29 @@ function getAuth() {
     key,
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
+}
+
+async function ensureTabExists(sheets: ReturnType<typeof google.sheets>, spreadsheetId: string) {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId });
+  const exists = meta.data.sheets?.some((s) => s.properties?.title === ORGANIC_TAB);
+
+  if (!exists) {
+    // Create the tab
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{ addSheet: { properties: { title: ORGANIC_TAB } } }],
+      },
+    });
+
+    // Add headers
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${ORGANIC_TAB}'!A1`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [HEADERS] },
+    });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -29,7 +60,9 @@ export async function POST(request: NextRequest) {
     if (!spreadsheetId) throw new Error("GOOGLE_SHEET_ID required");
 
     const sheets = google.sheets({ version: "v4", auth: getAuth() });
-    const sheetName = "לידים";
+
+    // Ensure the "אורגני" tab exists with headers
+    await ensureTabExists(sheets, spreadsheetId);
 
     const now = new Date().toISOString();
     const formName = type === "instructor" ? "אורגני - מדריכים" : "אורגני - חניכים";
@@ -47,38 +80,49 @@ export async function POST(request: NextRequest) {
       notes = lines.join("\n");
     }
 
-    // Match the column structure: A=id, B=created_time, ..., J=form_name, K=is_organic, L=platform, M=interest, N=full_name, O=phone
+    // Row matches HEADERS order, plus dashboard columns after
     const row = [
-      organicId,       // A: id
-      now,             // B: created_time
-      "",              // C: ad_id
-      "",              // D: ad_name
-      "",              // E: adset_id
-      "",              // F: adset_name
-      "",              // G: campaign_id
-      "",              // H: campaign_name
-      "",              // I: form_id
-      formName,        // J: form_name
-      "true",          // K: is_organic
-      "organic",       // L: platform
-      "",              // M: interest
-      fullName.trim(), // N: full_name
-      phone.trim(),    // O: phone
-      "",              // P: lead_status
-      "",              // Q: (gap)
-      "new",           // R: status (dashboard)
-      "",              // S: lastMessage
-      "",              // T: lastMessageDate
-      "",              // U: messageId
-      notes,           // V: notes
+      organicId,       // id
+      now,             // created_time
+      "",              // ad_id
+      "",              // ad_name
+      "",              // adset_id
+      "",              // adset_name
+      "",              // campaign_id
+      "",              // campaign_name
+      "",              // form_id
+      formName,        // form_name
+      "true",          // is_organic
+      "organic",       // platform
+      "",              // interest
+      fullName.trim(), // full_name
+      phone.trim(),    // phone_number
+      "CREATED",       // lead_status
     ];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: `'${sheetName}'!A1`,
+      range: `'${ORGANIC_TAB}'!A1`,
       valueInputOption: "USER_ENTERED",
       requestBody: { values: [row] },
     });
+
+    // Write notes to column V (index 21) if present — same position as dashboard notes
+    if (notes) {
+      // Get the row number that was just appended
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${ORGANIC_TAB}'!A:A`,
+      });
+      const lastRow = response.data.values?.length || 1;
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'${ORGANIC_TAB}'!V${lastRow}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [[notes]] },
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
