@@ -53,6 +53,15 @@ const HEADER_ALIASES: Record<string, string[]> = {
   fullName: ["full_name", "שם_מלא"],
   phone: ["phone_number", "phone"],
   leadStatus: ["lead_status"],
+  // Dashboard columns
+  status: ["סטטוס"],
+  lastMessage: ["הודעה אחרונה"],
+  lastMessageDate: ["תאריך הודעה"],
+  messageId: ["מזהה הודעה"],
+  notes: ["הערות"],
+  attempts: ["ניסיונות"],
+  plan: ["תוכנית"],
+  handledBy: ["טופל ע\"י"],
 };
 
 /** Known header names used to detect whether the first row is a header row */

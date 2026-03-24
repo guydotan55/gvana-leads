@@ -3,10 +3,20 @@ import { google } from "googleapis";
 
 const ORGANIC_TAB = "אורגני";
 
+// Full headers: FB columns (A-P) + gap (Q) + dashboard columns (R-Y)
 const HEADERS = [
   "id", "created_time", "ad_id", "ad_name", "adset_id", "adset_name",
   "campaign_id", "campaign_name", "form_id", "form_name", "is_organic",
   "platform", "interest", "full_name", "phone_number", "lead_status",
+  "",          // Q: gap
+  "סטטוס",     // R: status
+  "הודעה אחרונה", // S: lastMessage
+  "תאריך הודעה",  // T: lastMessageDate
+  "מזהה הודעה",   // U: messageId
+  "הערות",       // V: notes
+  "ניסיונות",    // W: attempts
+  "תוכנית",     // X: plan
+  "טופל ע\"י",   // Y: handledBy
 ];
 
 function getAuth() {
@@ -25,7 +35,6 @@ async function ensureTabExists(sheets: ReturnType<typeof google.sheets>, spreads
   const exists = meta.data.sheets?.some((s) => s.properties?.title === ORGANIC_TAB);
 
   if (!exists) {
-    // Create the tab
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId,
       requestBody: {
@@ -33,7 +42,6 @@ async function ensureTabExists(sheets: ReturnType<typeof google.sheets>, spreads
       },
     });
 
-    // Add headers
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: `'${ORGANIC_TAB}'!A1`,
@@ -61,7 +69,6 @@ export async function POST(request: NextRequest) {
 
     const sheets = google.sheets({ version: "v4", auth: getAuth() });
 
-    // Ensure the "אורגני" tab exists with headers
     await ensureTabExists(sheets, spreadsheetId);
 
     const now = new Date().toISOString();
@@ -80,24 +87,33 @@ export async function POST(request: NextRequest) {
       notes = lines.join("\n");
     }
 
-    // Row matches HEADERS order, plus dashboard columns after
+    // Full row: A-Y in one shot
     const row = [
-      organicId,       // id
-      now,             // created_time
-      "",              // ad_id
-      "",              // ad_name
-      "",              // adset_id
-      "",              // adset_name
-      "",              // campaign_id
-      "",              // campaign_name
-      "",              // form_id
-      formName,        // form_name
-      "true",          // is_organic
-      "organic",       // platform
-      "",              // interest
-      fullName.trim(), // full_name
-      phone.trim(),    // phone_number
-      "CREATED",       // lead_status
+      organicId,       // A: id
+      now,             // B: created_time
+      "",              // C: ad_id
+      "",              // D: ad_name
+      "",              // E: adset_id
+      "",              // F: adset_name
+      "",              // G: campaign_id
+      "",              // H: campaign_name
+      "",              // I: form_id
+      formName,        // J: form_name
+      "true",          // K: is_organic
+      "organic",       // L: platform
+      "",              // M: interest
+      fullName.trim(), // N: full_name
+      phone.trim(),    // O: phone_number
+      "CREATED",       // P: lead_status
+      "",              // Q: gap
+      "new",           // R: status
+      "",              // S: lastMessage
+      "",              // T: lastMessageDate
+      "",              // U: messageId
+      notes,           // V: notes
+      "",              // W: attempts
+      "",              // X: plan
+      "",              // Y: handledBy
     ];
 
     await sheets.spreadsheets.values.append({
@@ -106,23 +122,6 @@ export async function POST(request: NextRequest) {
       valueInputOption: "USER_ENTERED",
       requestBody: { values: [row] },
     });
-
-    // Write notes to column V (index 21) if present — same position as dashboard notes
-    if (notes) {
-      // Get the row number that was just appended
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: `'${ORGANIC_TAB}'!A:A`,
-      });
-      const lastRow = response.data.values?.length || 1;
-
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: `'${ORGANIC_TAB}'!V${lastRow}`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [[notes]] },
-      });
-    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
