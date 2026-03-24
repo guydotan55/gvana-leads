@@ -70,6 +70,8 @@ function formatDate(iso: string): string {
   }
 }
 
+/* ---------- Handled By ---------- */
+
 const HANDLED_BY_OPTIONS = ["נדב", "תמר"];
 
 function HandledBySelect({
@@ -111,7 +113,7 @@ function HandledBySelect({
             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
           }}
           autoFocus
-          className="px-2 py-1 rounded text-xs border border-gray-300 bg-white text-gray-700 w-20 focus:outline-none focus:ring-2 focus:ring-brand-sky/30"
+          className="px-2 py-1.5 rounded text-xs border border-gray-300 bg-white text-gray-700 w-20 focus:outline-none focus:ring-2 focus:ring-brand-sky/30"
           placeholder={t("leads.handledBy.other")}
         />
         <button
@@ -121,7 +123,7 @@ function HandledBySelect({
               onChange(lead, "");
             }
           }}
-          className="text-gray-400 hover:text-gray-600 text-xs"
+          className="text-gray-400 hover:text-gray-600 text-xs p-1"
         >
           ✕
         </button>
@@ -133,7 +135,7 @@ function HandledBySelect({
     <select
       value={lead.handledBy || ""}
       onChange={(e) => handleSelect(e.target.value)}
-      className="px-2 py-1 rounded text-xs border border-gray-200 bg-white text-gray-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-sky/30"
+      className="px-2 py-1.5 rounded text-xs border border-gray-200 bg-white text-gray-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-sky/30 min-h-[32px]"
     >
       <option value="">{t("leads.handledBy.select")}</option>
       {HANDLED_BY_OPTIONS.map((name) => (
@@ -143,6 +145,8 @@ function HandledBySelect({
     </select>
   );
 }
+
+/* ---------- Plan Multi-Select ---------- */
 
 const PLAN_OPTIONS = [
   { key: "short", label: t("leads.plan.short") },
@@ -172,7 +176,7 @@ function PlanMultiSelect({
         <button
           key={opt.key}
           onClick={() => toggle(opt.key)}
-          className={`px-2 py-0.5 rounded-full text-xs font-medium border transition-colors ${
+          className={`px-2 py-1 rounded-full text-xs font-medium border transition-colors min-h-[28px] ${
             selected.includes(opt.key)
               ? "bg-blue-100 text-blue-700 border-blue-300"
               : "bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100"
@@ -185,6 +189,8 @@ function PlanMultiSelect({
   );
 }
 
+/* ---------- Status Select ---------- */
+
 const INTERVIEW_STATUSES = ["under_review", "accepted", "rejected"];
 
 function isInterviewStatus(status: string): boolean {
@@ -192,7 +198,6 @@ function isInterviewStatus(status: string): boolean {
 }
 
 function getMainStatus(status: string): string {
-  // Interview statuses are sub-states of "relevant"
   return isInterviewStatus(status) ? "relevant" : status;
 }
 
@@ -213,7 +218,6 @@ function StatusSelect({
 
   function handleInterviewChange(value: string) {
     if (value === "") {
-      // Going back to just "relevant"
       onStatusChange(lead, "relevant");
     } else {
       onStatusChange(lead, value);
@@ -225,7 +229,7 @@ function StatusSelect({
       <select
         value={mainStatus}
         onChange={(e) => handleMainChange(e.target.value)}
-        className={`px-2 py-1 rounded-full text-xs font-medium border cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-sky/30 ${getStatusColor(mainStatus)}`}
+        className={`px-2 py-1.5 rounded-full text-xs font-medium border cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-sky/30 min-h-[32px] ${getStatusColor(mainStatus)}`}
       >
         {clientConfig.statuses.map((s) => (
           <option key={s.key} value={s.key}>
@@ -240,7 +244,7 @@ function StatusSelect({
               onClick={() =>
                 onStatusChange(lead, "unavailable", lead.attempts - 1)
               }
-              className="w-5 h-5 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold text-xs"
+              className="w-7 h-7 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold text-sm"
               title="-1"
             >
               −
@@ -256,7 +260,7 @@ function StatusSelect({
                 onStatusChange(lead, "unavailable", newAttempts);
               }
             }}
-            className="w-5 h-5 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold text-xs"
+            className="w-7 h-7 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold text-sm"
             title="+1"
           >
             +
@@ -267,7 +271,7 @@ function StatusSelect({
         <select
           value={interviewStatus}
           onChange={(e) => handleInterviewChange(e.target.value)}
-          className={`px-2 py-1 rounded-full text-xs font-medium border cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-sky/30 ${interviewStatus ? getStatusColor(interviewStatus) : "bg-gray-50 text-gray-400 border-gray-200"}`}
+          className={`px-2 py-1.5 rounded-full text-xs font-medium border cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-sky/30 min-h-[32px] ${interviewStatus ? getStatusColor(interviewStatus) : "bg-gray-50 text-gray-400 border-gray-200"}`}
         >
           <option value="">— {t("status.interviewed")}</option>
           {clientConfig.interviewStatuses.map((s) => (
@@ -287,6 +291,80 @@ function StatusSelect({
   );
 }
 
+/* ---------- Sorting ---------- */
+
+type SortKey = "fullName" | "phone" | "createdTime" | "status" | "handledBy" | "platform";
+type SortDir = "asc" | "desc";
+
+function getSortValue(lead: Lead, key: SortKey): string | number {
+  switch (key) {
+    case "fullName": return lead.fullName?.toLowerCase() || "";
+    case "phone": return lead.phone || "";
+    case "createdTime": return lead.createdTime || "";
+    case "status": return getMainStatus(lead.status);
+    case "handledBy": return lead.handledBy || "";
+    case "platform": return lead.platform?.toLowerCase() || "";
+  }
+}
+
+function SortHeader({
+  label,
+  sortKey,
+  currentSort,
+  currentDir,
+  onSort,
+}: {
+  label: string;
+  sortKey: SortKey;
+  currentSort: SortKey | null;
+  currentDir: SortDir;
+  onSort: (key: SortKey) => void;
+}) {
+  const isActive = currentSort === sortKey;
+  return (
+    <th
+      className="text-start px-3 py-3 text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none whitespace-nowrap"
+      onClick={() => onSort(sortKey)}
+    >
+      {label} {isActive ? (currentDir === "asc" ? "▲" : "▼") : ""}
+    </th>
+  );
+}
+
+/* ---------- Mobile Card ---------- */
+
+function LeadCard({
+  lead,
+  onStatusChange,
+  onHandledByChange,
+}: {
+  lead: Lead;
+  onStatusChange: (lead: Lead, status: string, attempts?: number, plan?: string) => void;
+  onHandledByChange: (lead: Lead, handledBy: string) => void;
+}) {
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="font-medium text-gray-900 text-sm">{lead.fullName}</p>
+          <p className="text-xs text-gray-500 font-mono mt-0.5" dir="ltr">{lead.phone}</p>
+        </div>
+        <SourceBadge source={lead.platform} />
+      </div>
+      <div className="text-xs text-gray-400" dir="ltr">{formatDate(lead.createdTime)}</div>
+      <div className="flex flex-col gap-2">
+        <StatusSelect lead={lead} onStatusChange={onStatusChange} />
+      </div>
+      <div className="pt-1 border-t border-gray-50">
+        <p className="text-xs text-gray-400 mb-1">{t("leads.table.handledBy")}</p>
+        <HandledBySelect lead={lead} onChange={onHandledByChange} />
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Main Component ---------- */
+
 export default function LeadTable({
   leads,
   allLeads,
@@ -295,6 +373,9 @@ export default function LeadTable({
   onStatusChange,
   onHandledByChange,
 }: LeadTableProps) {
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
   const formNames = useMemo(() => {
     const names = new Set<string>();
     allLeads.forEach((l) => {
@@ -302,6 +383,26 @@ export default function LeadTable({
     });
     return Array.from(names).sort();
   }, [allLeads]);
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
+
+  const sortedLeads = useMemo(() => {
+    if (!sortKey) return leads;
+    return [...leads].sort((a, b) => {
+      const aVal = getSortValue(a, sortKey);
+      const bVal = getSortValue(b, sortKey);
+      if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [leads, sortKey, sortDir]);
 
   return (
     <div>
@@ -311,7 +412,7 @@ export default function LeadTable({
           <select
             value={formFilter}
             onChange={(e) => onFormFilterChange(e.target.value)}
-            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-sky/30 focus:border-brand-sky"
+            className="px-3 py-2.5 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-sky/30 focus:border-brand-sky min-h-[40px]"
           >
             <option value="">{t("leads.filter.allForms")}</option>
             {formNames.map((name) => (
@@ -323,79 +424,81 @@ export default function LeadTable({
         </div>
       )}
 
-      {/* Table */}
-      {leads.length === 0 ? (
+      {sortedLeads.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
           <p className="text-gray-400">{t("leads.table.empty")}</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 uppercase">
-                    {t("leads.table.name")}
-                  </th>
-                  <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 uppercase">
-                    {t("leads.table.phone")}
-                  </th>
-                  <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 uppercase">
-                    {t("leads.table.date")}
-                  </th>
-                  <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 uppercase">
-                    {t("leads.table.source")}
-                  </th>
-                  <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 uppercase">
-                    {t("leads.table.status")}
-                  </th>
-                  <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 uppercase">
-                    {t("leads.table.handledBy")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {leads.map((lead) => (
-                  <tr
-                    key={`${lead.sheetTab}:${lead.row}`}
-                    className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
-                  >
-                    <td className="px-4 py-3">
-                      <span className="font-medium text-gray-900">
-                        {lead.fullName}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-gray-600 font-mono" dir="ltr">
-                        {lead.phone}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-gray-500 whitespace-nowrap" dir="ltr">
-                        {formatDate(lead.createdTime)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <SourceBadge source={lead.platform} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusSelect
-                        lead={lead}
-                        onStatusChange={onStatusChange}
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <HandledBySelect
-                        lead={lead}
-                        onChange={onHandledByChange}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <>
+          {/* Mobile: Card layout */}
+          <div className="md:hidden space-y-3">
+            {sortedLeads.map((lead) => (
+              <LeadCard
+                key={`${lead.sheetTab}:${lead.row}`}
+                lead={lead}
+                onStatusChange={onStatusChange}
+                onHandledByChange={onHandledByChange}
+              />
+            ))}
           </div>
-        </div>
+
+          {/* Desktop: Table layout */}
+          <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <SortHeader label={t("leads.table.name")} sortKey="fullName" currentSort={sortKey} currentDir={sortDir} onSort={handleSort} />
+                    <SortHeader label={t("leads.table.phone")} sortKey="phone" currentSort={sortKey} currentDir={sortDir} onSort={handleSort} />
+                    <SortHeader label={t("leads.table.date")} sortKey="createdTime" currentSort={sortKey} currentDir={sortDir} onSort={handleSort} />
+                    <SortHeader label={t("leads.table.status")} sortKey="status" currentSort={sortKey} currentDir={sortDir} onSort={handleSort} />
+                    <SortHeader label={t("leads.table.handledBy")} sortKey="handledBy" currentSort={sortKey} currentDir={sortDir} onSort={handleSort} />
+                    <SortHeader label={t("leads.table.source")} sortKey="platform" currentSort={sortKey} currentDir={sortDir} onSort={handleSort} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedLeads.map((lead) => (
+                    <tr
+                      key={`${lead.sheetTab}:${lead.row}`}
+                      className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
+                    >
+                      <td className="px-3 py-3">
+                        <span className="font-medium text-gray-900 text-sm">
+                          {lead.fullName}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="text-sm text-gray-600 font-mono" dir="ltr">
+                          {lead.phone}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="text-sm text-gray-500 whitespace-nowrap" dir="ltr">
+                          {formatDate(lead.createdTime)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <StatusSelect
+                          lead={lead}
+                          onStatusChange={onStatusChange}
+                        />
+                      </td>
+                      <td className="px-3 py-3">
+                        <HandledBySelect
+                          lead={lead}
+                          onChange={onHandledByChange}
+                        />
+                      </td>
+                      <td className="px-3 py-3">
+                        <SourceBadge source={lead.platform} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
