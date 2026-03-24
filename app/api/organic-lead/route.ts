@@ -32,10 +32,11 @@ export async function POST(request: NextRequest) {
 
     const now = new Date().toISOString();
     const formName = type === "instructor" ? "אורגני - מדריכים" : "אורגני - חניכים";
+    const organicId = `org:${Date.now()}`;
 
     // Match the column structure: A=id, B=created_time, ..., J=form_name, K=is_organic, L=platform, M=interest, N=full_name, O=phone
     const row = [
-      "",              // A: id (empty for organic)
+      organicId,       // A: id
       now,             // B: created_time
       "",              // C: ad_id
       "",              // D: ad_name
