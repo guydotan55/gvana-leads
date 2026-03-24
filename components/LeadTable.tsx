@@ -119,11 +119,27 @@ function StatusSelect({
       </select>
       {lead.status === "unavailable" && (
         <div className="flex items-center gap-1 text-xs text-gray-500">
+          {lead.attempts > 0 && (
+            <button
+              onClick={() =>
+                onStatusChange(lead, "unavailable", lead.attempts - 1)
+              }
+              className="w-5 h-5 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold text-xs"
+              title="-1"
+            >
+              −
+            </button>
+          )}
           <span>{t("leads.attempts")}: {lead.attempts}</span>
           <button
-            onClick={() =>
-              onStatusChange(lead, "unavailable", lead.attempts + 1)
-            }
+            onClick={() => {
+              const newAttempts = lead.attempts + 1;
+              if (newAttempts >= 4) {
+                onStatusChange(lead, "not_relevant", newAttempts);
+              } else {
+                onStatusChange(lead, "unavailable", newAttempts);
+              }
+            }}
             className="w-5 h-5 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold text-xs"
             title="+1"
           >
