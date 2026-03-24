@@ -1,5 +1,5 @@
-import OrganicForm from "@/components/OrganicForm";
+import InstructorForm from "@/components/InstructorForm";
 
 export default function InstructorFormPage() {
-  return <OrganicForm type="instructor" />;
+  return <InstructorForm />;
 }

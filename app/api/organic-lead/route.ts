@@ -14,7 +14,8 @@ function getAuth() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { fullName, phone, type } = await request.json();
+    const body = await request.json();
+    const { fullName, phone, type, extras } = body;
 
     if (!fullName?.trim() || !phone?.trim()) {
       return NextResponse.json({ error: "Name and phone are required" }, { status: 400 });
@@ -33,6 +34,18 @@ export async function POST(request: NextRequest) {
     const now = new Date().toISOString();
     const formName = type === "instructor" ? "אורגני - מדריכים" : "אורגני - חניכים";
     const organicId = `org:${Date.now()}`;
+
+    // Build notes from extra fields
+    let notes = "";
+    if (extras && typeof extras === "object") {
+      const lines: string[] = [];
+      for (const [key, value] of Object.entries(extras)) {
+        if (value && typeof value === "string" && value.trim()) {
+          lines.push(`${key}: ${value.trim()}`);
+        }
+      }
+      notes = lines.join("\n");
+    }
 
     // Match the column structure: A=id, B=created_time, ..., J=form_name, K=is_organic, L=platform, M=interest, N=full_name, O=phone
     const row = [
@@ -54,6 +67,10 @@ export async function POST(request: NextRequest) {
       "",              // P: lead_status
       "",              // Q: (gap)
       "new",           // R: status (dashboard)
+      "",              // S: lastMessage
+      "",              // T: lastMessageDate
+      "",              // U: messageId
+      notes,           // V: notes
     ];
 
     await sheets.spreadsheets.values.append({
