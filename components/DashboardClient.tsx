@@ -75,6 +75,32 @@ export default function DashboardClient() {
     }
   }
 
+  async function handleHandledByChange(lead: Lead, handledBy: string) {
+    const prevLeads = leads;
+    setLeads((prev) =>
+      prev.map((l) =>
+        l.row === lead.row && l.sheetTab === lead.sheetTab
+          ? { ...l, handledBy }
+          : l
+      )
+    );
+    skipNextPoll.current = true;
+
+    try {
+      const res = await fetch(`/api/leads/${lead.row}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: lead.status, handledBy, sheetTab: lead.sheetTab }),
+      });
+      if (!res.ok) throw new Error("Update failed");
+    } catch {
+      setLeads(prevLeads);
+      skipNextPoll.current = false;
+      setUpdateError(t("common.error"));
+      setTimeout(() => setUpdateError(""), 3000);
+    }
+  }
+
   const todayISO = new Date().toISOString().slice(0, 10);
   const newToday = leads.filter(
     (l) => l.status === "new" && l.createdTime?.startsWith(todayISO)
@@ -124,6 +150,7 @@ export default function DashboardClient() {
         formFilter={formFilter}
         onFormFilterChange={setFormFilter}
         onStatusChange={handleStatusChange}
+        onHandledByChange={handleHandledByChange}
       />
     </div>
   );

@@ -57,5 +57,8 @@
   "leads.plan.short": "קצרה",
   "leads.plan.long": "ארוכה",
   "leads.plan.tech": "טכנולוגית",
-  "leads.plan.select": "בחר תוכנית"
+  "leads.plan.select": "בחר תוכנית",
+  "leads.table.handledBy": "טופל ע\"י",
+  "leads.handledBy.select": "— בחר —",
+  "leads.handledBy.other": "אחר..."
 }

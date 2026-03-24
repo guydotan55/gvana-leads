@@ -25,6 +25,7 @@
     "messageId":       { "index": 20, "letter": "U", "header": "מזהה הודעה" },
     "notes":           { "index": 21, "letter": "V", "header": "הערות" },
     "attempts":        { "index": 22, "letter": "W", "header": "ניסיונות" },
-    "plan":            { "index": 23, "letter": "X", "header": "תוכנית" }
+    "plan":            { "index": 23, "letter": "X", "header": "תוכנית" },
+    "handledBy":       { "index": 24, "letter": "Y", "header": "טופל ע\"י" }
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { t } from "@/lib/i18n";
 import { clientConfig } from "@/client.config";
 import type { Lead } from "@/lib/sheets";
@@ -11,6 +11,7 @@ interface LeadTableProps {
   formFilter: string;
   onFormFilterChange: (form: string) => void;
   onStatusChange: (lead: Lead, status: string, attempts?: number, plan?: string) => void;
+  onHandledByChange: (lead: Lead, handledBy: string) => void;
 }
 
 const statusColorClasses: Record<string, string> = {
@@ -67,6 +68,80 @@ function formatDate(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+const HANDLED_BY_OPTIONS = ["נדב", "תמר"];
+
+function HandledBySelect({
+  lead,
+  onChange,
+}: {
+  lead: Lead;
+  onChange: (lead: Lead, handledBy: string) => void;
+}) {
+  const [isOther, setIsOther] = useState(
+    lead.handledBy !== "" && !HANDLED_BY_OPTIONS.includes(lead.handledBy)
+  );
+
+  function handleSelect(value: string) {
+    if (value === "__other__") {
+      setIsOther(true);
+    } else {
+      setIsOther(false);
+      onChange(lead, value);
+    }
+  }
+
+  if (isOther) {
+    return (
+      <div className="flex items-center gap-1">
+        <input
+          type="text"
+          defaultValue={HANDLED_BY_OPTIONS.includes(lead.handledBy) ? "" : lead.handledBy}
+          onBlur={(e) => {
+            const val = e.target.value.trim();
+            if (val) {
+              onChange(lead, val);
+            } else {
+              setIsOther(false);
+              onChange(lead, "");
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          }}
+          autoFocus
+          className="px-2 py-1 rounded text-xs border border-gray-300 bg-white text-gray-700 w-20 focus:outline-none focus:ring-2 focus:ring-brand-sky/30"
+          placeholder={t("leads.handledBy.other")}
+        />
+        <button
+          onClick={() => {
+            setIsOther(false);
+            if (!HANDLED_BY_OPTIONS.includes(lead.handledBy)) {
+              onChange(lead, "");
+            }
+          }}
+          className="text-gray-400 hover:text-gray-600 text-xs"
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <select
+      value={lead.handledBy || ""}
+      onChange={(e) => handleSelect(e.target.value)}
+      className="px-2 py-1 rounded text-xs border border-gray-200 bg-white text-gray-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-sky/30"
+    >
+      <option value="">{t("leads.handledBy.select")}</option>
+      {HANDLED_BY_OPTIONS.map((name) => (
+        <option key={name} value={name}>{name}</option>
+      ))}
+      <option value="__other__">{t("leads.handledBy.other")}</option>
+    </select>
+  );
 }
 
 const PLAN_OPTIONS = [
@@ -218,6 +293,7 @@ export default function LeadTable({
   formFilter,
   onFormFilterChange,
   onStatusChange,
+  onHandledByChange,
 }: LeadTableProps) {
   const formNames = useMemo(() => {
     const names = new Set<string>();
@@ -273,6 +349,9 @@ export default function LeadTable({
                   <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 uppercase">
                     {t("leads.table.status")}
                   </th>
+                  <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 uppercase">
+                    {t("leads.table.handledBy")}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -303,6 +382,12 @@ export default function LeadTable({
                       <StatusSelect
                         lead={lead}
                         onStatusChange={onStatusChange}
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <HandledBySelect
+                        lead={lead}
+                        onChange={onHandledByChange}
                       />
                     </td>
                   </tr>

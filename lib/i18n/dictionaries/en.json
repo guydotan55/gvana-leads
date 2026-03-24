@@ -57,5 +57,8 @@
   "leads.plan.short": "Short",
   "leads.plan.long": "Long",
   "leads.plan.tech": "Technological",
-  "leads.plan.select": "Select Plan"
+  "leads.plan.select": "Select Plan",
+  "leads.table.handledBy": "Handled By",
+  "leads.handledBy.select": "— Select —",
+  "leads.handledBy.other": "Other..."
 }

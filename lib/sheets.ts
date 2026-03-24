@@ -31,6 +31,7 @@ export interface Lead {
   notes: string;
   attempts: number;
   plan: string;
+  handledBy: string;
 }
 
 /* ---------- Header alias map for dynamic column detection ---------- */
@@ -140,6 +141,7 @@ function rowToLeadDynamic(
     notes: get("notes") || "",
     attempts: parseInt(get("attempts") || "0", 10) || 0,
     plan: get("plan") || "",
+    handledBy: get("handledBy") || "",
   };
 }
 
@@ -171,6 +173,7 @@ function buildFixedColumnMap(): Record<string, number> {
     notes: db.notes.index,
     attempts: db.attempts.index,
     plan: db.plan.index,
+    handledBy: db.handledBy.index,
   };
 }
 
@@ -192,7 +195,7 @@ export async function getLeads(): Promise<Lead[]> {
   for (const tabName of tabNames) {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${tabName}'!A1:X`,
+      range: `'${tabName}'!A1:Y`,
     });
 
     const rows = response.data.values || [];
