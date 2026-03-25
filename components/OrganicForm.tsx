@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 interface OrganicFormProps {
   type: "student" | "instructor";
@@ -9,6 +10,10 @@ interface OrganicFormProps {
 export default function OrganicForm({ type }: OrganicFormProps) {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
+  const searchParams = useSearchParams();
+  const utmSource = searchParams.get("utm_source") || "";
+  const utmMedium = searchParams.get("utm_medium") || "";
+  const utmCampaign = searchParams.get("utm_campaign") || "";
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
@@ -27,7 +32,7 @@ export default function OrganicForm({ type }: OrganicFormProps) {
       const res = await fetch("/api/organic-lead", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName, phone, type }),
+        body: JSON.stringify({ fullName, phone, type, utmSource, utmMedium, utmCampaign }),
       });
 
       if (!res.ok) {

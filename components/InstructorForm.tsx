@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 
 const STEPS = [
@@ -33,6 +34,11 @@ export default function InstructorForm() {
   const [dischargeDate, setDischargeDate] = useState("");
   const [comments, setComments] = useState("");
 
+  const searchParams = useSearchParams();
+  const utmSource = searchParams.get("utm_source") || "";
+  const utmMedium = searchParams.get("utm_medium") || "";
+  const utmCampaign = searchParams.get("utm_campaign") || "";
+
   function canAdvance(): boolean {
     switch (step) {
       case 1: return fullName.trim() !== "" && phone.trim() !== "" && city.trim() !== "";
@@ -55,6 +61,9 @@ export default function InstructorForm() {
           fullName,
           phone,
           type: "instructor",
+          utmSource,
+          utmMedium,
+          utmCampaign,
           extras: {
             "עיר מגורים": city,
             "ניסיון בהדרכה/פיקוד/חינוך": experience,

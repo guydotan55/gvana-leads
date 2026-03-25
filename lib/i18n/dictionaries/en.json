@@ -68,6 +68,7 @@
   "leads.filter.source": "Source",
   "leads.filter.allSources": "All",
   "leads.filter.facebook": "Facebook",
+  "leads.filter.paid": "Paid (LP)",
   "leads.filter.organic": "Organic",
   "leads.filter.website": "Website",
   "leads.showAnswers": "Show Answers",

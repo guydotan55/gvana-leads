@@ -16,10 +16,13 @@ function getLeadType(lead: Lead): "student" | "instructor" {
   return "student";
 }
 
-function getLeadSource(lead: Lead): "facebook" | "organic" | "website" {
+function getLeadSource(lead: Lead): "facebook" | "organic" | "paid" | "website" {
   const p = (lead.platform || "").toLowerCase();
+  const formName = lead.formName || "";
   if (p === "organic") return "organic";
   if (p === "website") return "website";
+  // Leads from LP forms with utm_source=facebook are "paid" (ממומן)
+  if (formName.includes("ממומן")) return "paid";
   return "facebook";
 }
 
@@ -186,6 +189,7 @@ export default function DashboardClient() {
         >
           <option value="">{t("leads.filter.source")}: {t("leads.filter.allSources")}</option>
           <option value="facebook">{t("leads.filter.facebook")}</option>
+          <option value="paid">{t("leads.filter.paid")}</option>
           <option value="organic">{t("leads.filter.organic")}</option>
           <option value="website">{t("leads.filter.website")}</option>
         </select>

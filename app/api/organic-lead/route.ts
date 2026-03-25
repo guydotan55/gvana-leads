@@ -54,7 +54,7 @@ async function ensureTabExists(sheets: ReturnType<typeof google.sheets>, spreads
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { fullName, phone, type, extras } = body;
+    const { fullName, phone, type, extras, utmSource, utmMedium, utmCampaign } = body;
 
     if (!fullName?.trim() || !phone?.trim()) {
       return NextResponse.json({ error: "Name and phone are required" }, { status: 400 });
@@ -72,8 +72,15 @@ export async function POST(request: NextRequest) {
     await ensureTabExists(sheets, spreadsheetId);
 
     const now = new Date().toISOString();
-    const formName = type === "instructor" ? "אורגני - מדריכים" : "אורגני - חניכים";
     const organicId = `org:${Date.now()}`;
+
+    // Determine platform from UTM: facebook/instagram = "fb"/"ig", otherwise "organic"
+    const isPaid = utmSource === "facebook" || utmSource === "instagram" || utmMedium === "paid";
+    const platform = isPaid ? (utmSource || "fb") : "organic";
+    const typeLabel = type === "instructor" ? "מדריכים" : "חניכים";
+    const sourceLabel = isPaid ? "ממומן" : "אורגני";
+    const formName = `${sourceLabel} - ${typeLabel}`;
+    const campaignName = utmCampaign || "";
 
     // Build notes from extra fields
     let notes = "";
@@ -96,11 +103,11 @@ export async function POST(request: NextRequest) {
       "",              // E: adset_id
       "",              // F: adset_name
       "",              // G: campaign_id
-      "",              // H: campaign_name
+      campaignName,    // H: campaign_name
       "",              // I: form_id
       formName,        // J: form_name
-      "true",          // K: is_organic
-      "organic",       // L: platform
+      isPaid ? "false" : "true", // K: is_organic
+      platform,        // L: platform
       "",              // M: interest
       fullName.trim(), // N: full_name
       phone.trim(),    // O: phone_number
