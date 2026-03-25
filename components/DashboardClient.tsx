@@ -18,11 +18,11 @@ function getLeadType(lead: Lead): "student" | "instructor" {
 
 function getLeadSource(lead: Lead): "facebook" | "organic" | "paid" | "website" {
   const p = (lead.platform || "").toLowerCase();
-  const formName = lead.formName || "";
+  const isFormLead = lead.leadId?.startsWith("org:");
   if (p === "organic") return "organic";
   if (p === "website") return "website";
-  // Leads from LP forms with utm_source=facebook are "paid" (ממומן)
-  if (formName.includes("ממומן")) return "paid";
+  // LP form leads with facebook platform = paid, native FB leads = facebook
+  if (isFormLead && (p === "facebook" || p === "instagram")) return "paid";
   return "facebook";
 }
 
