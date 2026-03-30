@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     // Determine platform from UTM: facebook/instagram = "fb"/"ig", otherwise "organic"
     const isPaid = utmSource === "facebook" || utmSource === "instagram" || utmMedium === "paid";
     const platform = isPaid ? (utmSource || "fb") : "organic";
-    const formName = type === "instructor" ? "טופס מדריכים" : "טופס חניכים";
+    const formName = type === "instructor" ? "טופס מדריכים" : "חניכים כללי";
     const campaignName = utmCampaign || "";
 
     // Build notes from extra fields
