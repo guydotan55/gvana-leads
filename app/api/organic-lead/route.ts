@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Name and phone are required" }, { status: 400 });
     }
 
-    if (!["student", "instructor"].includes(type)) {
+    if (!["student", "instructor", "tech"].includes(type)) {
       return NextResponse.json({ error: "Invalid type" }, { status: 400 });
     }
 
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     // Determine platform from UTM: facebook/instagram = "fb"/"ig", otherwise "organic"
     const isPaid = utmSource === "facebook" || utmSource === "instagram" || utmMedium === "paid";
     const platform = isPaid ? (utmSource || "fb") : "organic";
-    const formName = type === "instructor" ? "טופס מדריכים" : "חניכים כללי";
+    const formName = type === "instructor" ? "טופס מדריכים" : type === "tech" ? "תוכנית טכנולוגית" : "חניכים כללי";
     const campaignName = utmCampaign || "";
 
     // Build notes from extra fields
