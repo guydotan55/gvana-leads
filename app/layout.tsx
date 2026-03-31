@@ -4,6 +4,9 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: clientConfig.name,
+  icons: {
+    icon: "/logo-color.png",
+  },
 };
 
 export default function RootLayout({
