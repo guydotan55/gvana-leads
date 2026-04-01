@@ -15,7 +15,8 @@ function getLeadType(lead: Lead): "student" | "instructor" | "tech" {
   const tab = lead.sheetTab || "";
   const combined = name + tab;
   if (combined.includes("מדריך") || combined.includes("מדריכ")) return "instructor";
-  if (combined.includes("טכנולוגית") || lead.adsetId === TECH_ADSET_ID) return "tech";
+  const rawAdsetId = (lead.adsetId || "").replace(/^as:/, "");
+  if (combined.includes("טכנולוגית") || rawAdsetId === TECH_ADSET_ID) return "tech";
   return "student";
 }
 
