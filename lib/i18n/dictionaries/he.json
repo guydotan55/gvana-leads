@@ -64,6 +64,7 @@
   "leads.filter.leadType": "סוג ליד",
   "leads.filter.allTypes": "הכל",
   "leads.filter.students": "חניכים",
+  "leads.filter.tech": "טכנולוגי",
   "leads.filter.instructors": "מדריכים",
   "leads.filter.source": "מקור",
   "leads.filter.allSources": "הכל",
