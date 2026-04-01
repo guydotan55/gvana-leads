@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
+import { sendCAPIEvent } from "@/lib/capi";
 
 const ORGANIC_TAB = "אורגני";
 
@@ -127,6 +128,20 @@ export async function POST(request: NextRequest) {
       valueInputOption: "USER_ENTERED",
       requestBody: { values: [row] },
     });
+
+    // Fire server-side CAPI Lead event for student and tech form submissions
+    if (type === "tech" || type === "student") {
+      sendCAPIEvent({
+        eventName: "Lead",
+        phone: phone.trim(),
+        leadId: organicId,
+        sourceUrl: request.headers.get("referer") || undefined,
+        customData: {
+          content_name: type === "tech" ? "tech_form" : "student_form",
+          campaign_name: campaignName || undefined,
+        },
+      }).catch((err) => console.error("CAPI Lead event failed:", err));
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

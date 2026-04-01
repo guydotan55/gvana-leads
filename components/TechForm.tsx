@@ -2,7 +2,16 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Script from "next/script";
 import Image from "next/image";
+
+const FB_PIXEL_ID = "775454794700271";
+
+declare global {
+  interface Window {
+    fbq: (...args: unknown[]) => void;
+  }
+}
 
 const MILITARY_OPTIONS = [
   "לפני צו ראשון",
@@ -21,6 +30,7 @@ const INTEREST_OPTIONS = [
 ];
 
 export default function TechForm() {
+  const [step, setStep] = useState(1);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [age, setAge] = useState("");
@@ -36,19 +46,42 @@ export default function TechForm() {
   const utmMedium = searchParams.get("utm_medium") || "";
   const utmCampaign = searchParams.get("utm_campaign") || "";
 
+  function trackEvent(eventName: string, data?: Record<string, unknown>) {
+    // Browser pixel
+    if (typeof window !== "undefined" && window.fbq) {
+      window.fbq("track", eventName, data);
+    }
+    // Server CAPI
+    fetch("/api/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eventName,
+        phone: phone.trim() || undefined,
+        contentName: data?.content_name,
+        sourceUrl: window.location.href,
+      }),
+    }).catch(() => {});
+  }
+
+  function goToStep(next: number) {
+    setStep(next);
+    trackEvent("ViewContent", { content_name: `tech_form_step_${next}` });
+  }
+
   function toggleInterest(value: string) {
     setInterests((prev) =>
       prev.includes(value) ? prev.filter((i) => i !== value) : [...prev, value]
     );
   }
 
-  const canSubmit =
+  const canNext1 =
     fullName.trim() !== "" &&
     phone.trim() !== "" &&
     age.trim() !== "" &&
-    city.trim() !== "" &&
-    militaryStatus !== "" &&
-    interests.length > 0;
+    city.trim() !== "";
+  const canNext2 = militaryStatus !== "";
+  const canSubmit = interests.length > 0;
 
   async function handleSubmit() {
     setError("");
@@ -75,6 +108,10 @@ export default function TechForm() {
       });
 
       if (!res.ok) throw new Error("שגיאה בשליחה");
+      // Browser pixel only — CAPI Lead is fired by /api/organic-lead
+      if (typeof window !== "undefined" && window.fbq) {
+        window.fbq("track", "Lead", { content_name: "tech_form" });
+      }
       setSubmitted(true);
     } catch {
       setError("שגיאה בשליחה, נסה שוב");
@@ -109,6 +146,34 @@ export default function TechForm() {
 
   return (
     <div className="form-page">
+      <Script
+        id="fb-pixel"
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `
+            !function(f,b,e,v,n,t,s)
+            {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+            n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+            if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+            n.queue=[];t=b.createElement(e);t.async=!0;
+            t.src=v;s=b.getElementsByTagName(e)[0];
+            s.parentNode.insertBefore(t,s)}(window, document,'script',
+            'https://connect.facebook.net/en_US/fbevents.js');
+            fbq('init', '${FB_PIXEL_ID}');
+            fbq('track', 'PageView');
+          `,
+        }}
+      />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <noscript>
+        <img
+          height="1"
+          width="1"
+          style={{ display: "none" }}
+          src={`https://www.facebook.com/tr?id=${FB_PIXEL_ID}&ev=PageView&noscript=1`}
+          alt=""
+        />
+      </noscript>
       <div className="bg-decoration">
         <div className="bg-blob bg-blob-1" />
         <div className="bg-blob bg-blob-2" />
@@ -117,124 +182,178 @@ export default function TechForm() {
 
       <div className="form-container">
         <header className="form-header">
-          <Image src="/logo-color.png" alt="מכינת גוונא" width={80} height={80} className="form-logo" />
+          <Image src="/logo-color.png" alt="מכינת גוונא" width={56} height={56} className="form-logo" />
           <h1>מכינת גוונא — תוכנית טכנולוגית</h1>
           <p className="subtitle">הכשרה טכנולוגית מעשית לצד מכינה קדם צבאית — הכנה ליחידות הטכנולוגיה המובילות בצה״ל</p>
         </header>
 
-        <div className="form-card">
-          <div className="step-content">
-            <div className="field">
-              <label htmlFor="fullName">שם מלא *</label>
-              <input
-                id="fullName"
-                type="text"
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="השם המלא שלך"
-              />
-            </div>
-
-            <div className="field">
-              <label htmlFor="phone">מספר טלפון *</label>
-              <input
-                id="phone"
-                type="tel"
-                required
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                dir="ltr"
-                placeholder="050-0000000"
-              />
-            </div>
-
-            <div className="field">
-              <label htmlFor="city">עיר מגורים *</label>
-              <input
-                id="city"
-                type="text"
-                required
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="עיר מגורים נוכחית"
-              />
-            </div>
-
-            <div className="field">
-              <label htmlFor="age">גיל *</label>
-              <input
-                id="age"
-                type="number"
-                required
-                value={age}
-                onChange={(e) => setAge(e.target.value)}
-                dir="ltr"
-                placeholder="לדוגמה: 20"
-                min="14"
-                max="99"
-              />
-            </div>
-
-            <div className="field">
-              <label>סטטוס מול צה״ל *</label>
-              <div className="radio-group">
-                {MILITARY_OPTIONS.map((opt) => (
-                  <label key={opt} className={`radio-option ${militaryStatus === opt ? "selected" : ""}`}>
-                    <input
-                      type="radio"
-                      name="militaryStatus"
-                      checked={militaryStatus === opt}
-                      onChange={() => setMilitaryStatus(opt)}
-                    />
-                    <span className="radio-circle">
-                      {militaryStatus === opt && <span className="radio-dot" />}
-                    </span>
-                    <span className="radio-label">{opt}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="field">
-              <label>מה מעניין אותך? *</label>
-              <span className="field-hint">ניתן לבחור יותר מאפשרות אחת</span>
-              <div className="checkbox-group">
-                {INTEREST_OPTIONS.map((opt) => (
-                  <label key={opt.value} className={`checkbox-option ${interests.includes(opt.value) ? "selected" : ""}`}>
-                    <input
-                      type="checkbox"
-                      checked={interests.includes(opt.value)}
-                      onChange={() => toggleInterest(opt.value)}
-                    />
-                    <span className="checkbox-box">
-                      {interests.includes(opt.value) && (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                      )}
-                    </span>
-                    <span className="checkbox-label">{opt.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+        <div className="progress-bar">
+          <div className="progress-track">
+            <div className="progress-fill" style={{ width: `${(step / 3) * 100}%` }} />
           </div>
-
-          {error && <p className="error-msg">{error}</p>}
-
-          <div className="form-nav">
-            <div className="nav-spacer" />
-            <button
-              type="button"
-              className="btn-submit"
-              disabled={!canSubmit || submitting}
-              onClick={handleSubmit}
-            >
-              {submitting ? "שולח..." : "שליחה"}
-            </button>
-          </div>
+          <span className="progress-text">{step} / 3</span>
         </div>
 
-        <p className="footer-note">מכינת גוונא — תוכנית טכנולוגית</p>
+        <div className="form-card">
+          {step === 1 && (
+            <div className="step-content">
+              <div className="field">
+                <label htmlFor="fullName">שם מלא *</label>
+                <input
+                  id="fullName"
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="השם המלא שלך"
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="phone">מספר טלפון *</label>
+                <input
+                  id="phone"
+                  type="tel"
+                  required
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  dir="ltr"
+                  placeholder="050-0000000"
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="city">עיר מגורים *</label>
+                <input
+                  id="city"
+                  type="text"
+                  required
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="עיר מגורים נוכחית"
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="age">גיל *</label>
+                <input
+                  id="age"
+                  type="number"
+                  required
+                  value={age}
+                  onChange={(e) => setAge(e.target.value)}
+                  dir="ltr"
+                  placeholder="לדוגמה: 20"
+                  min="14"
+                  max="99"
+                />
+              </div>
+
+              <div className="form-nav">
+                <div className="nav-spacer" />
+                <button
+                  type="button"
+                  className="btn-next"
+                  disabled={!canNext1}
+                  onClick={() => goToStep(2)}
+                >
+                  המשך
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="step-content">
+              <div className="field">
+                <label>סטטוס מול צה״ל *</label>
+                <div className="radio-group">
+                  {MILITARY_OPTIONS.map((opt) => (
+                    <label key={opt} className={`radio-option ${militaryStatus === opt ? "selected" : ""}`}>
+                      <input
+                        type="radio"
+                        name="militaryStatus"
+                        checked={militaryStatus === opt}
+                        onChange={() => setMilitaryStatus(opt)}
+                      />
+                      <span className="radio-circle">
+                        {militaryStatus === opt && <span className="radio-dot" />}
+                      </span>
+                      <span className="radio-label">{opt}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-nav">
+                <button
+                  type="button"
+                  className="btn-back"
+                  onClick={() => goToStep(1)}
+                >
+                  חזרה
+                </button>
+                <div className="nav-spacer" />
+                <button
+                  type="button"
+                  className="btn-next"
+                  disabled={!canNext2}
+                  onClick={() => goToStep(3)}
+                >
+                  המשך
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="step-content">
+              <div className="field">
+                <label>מה מעניין אותך? *</label>
+                <span className="field-hint">ניתן לבחור יותר מאפשרות אחת</span>
+                <div className="checkbox-group">
+                  {INTEREST_OPTIONS.map((opt) => (
+                    <label key={opt.value} className={`checkbox-option ${interests.includes(opt.value) ? "selected" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={interests.includes(opt.value)}
+                        onChange={() => toggleInterest(opt.value)}
+                      />
+                      <span className="checkbox-box">
+                        {interests.includes(opt.value) && (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                        )}
+                      </span>
+                      <span className="checkbox-label">{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {error && <p className="error-msg">{error}</p>}
+
+              <div className="form-nav">
+                <button
+                  type="button"
+                  className="btn-back"
+                  onClick={() => goToStep(2)}
+                >
+                  חזרה
+                </button>
+                <div className="nav-spacer" />
+                <button
+                  type="button"
+                  className="btn-submit"
+                  disabled={!canSubmit || submitting}
+                  onClick={handleSubmit}
+                >
+                  {submitting ? "שולח..." : "שליחה"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
       </div>
 
       <style jsx>{styles}</style>
@@ -248,7 +367,7 @@ const styles = `
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    padding: 24px 16px 48px;
+    padding: 8px 16px 24px;
     position: relative;
     overflow: hidden;
     background: linear-gradient(160deg, #f0f4f8 0%, #e8edf5 40%, #fdf5ee 100%);
@@ -301,33 +420,33 @@ const styles = `
     max-width: 520px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 10px;
   }
 
   .form-header {
     text-align: center;
-    padding: 8px 0;
+    padding: 0;
   }
 
   .form-header h1 {
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 700;
     color: #1d2752;
-    margin: 12px 0 4px;
-    line-height: 1.4;
+    margin: 6px 0 2px;
+    line-height: 1.3;
   }
 
   .subtitle {
-    font-size: 14px;
+    font-size: 13px;
     color: #6b7280;
     margin: 0;
-    line-height: 1.6;
+    line-height: 1.5;
   }
 
   .form-card {
     background: white;
     border-radius: 20px;
-    padding: 28px 24px;
+    padding: 20px 20px;
     box-shadow:
       0 1px 3px rgba(0, 0, 0, 0.04),
       0 6px 24px rgba(0, 0, 0, 0.06);
@@ -356,13 +475,13 @@ const styles = `
   .step-content {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 14px;
   }
 
   .field {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
   }
 
   .field label {
@@ -382,7 +501,7 @@ const styles = `
   .field input[type="tel"],
   .field input[type="number"] {
     width: 100%;
-    padding: 12px 14px;
+    padding: 10px 14px;
     border: 1.5px solid #e5e7eb;
     border-radius: 12px;
     font-size: 16px;
@@ -410,15 +529,15 @@ const styles = `
   .radio-group {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-top: 4px;
+    gap: 8px;
+    margin-top: 2px;
   }
 
   .radio-option {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 14px;
+    gap: 10px;
+    padding: 10px 14px;
     border: 1.5px solid #e5e7eb;
     border-radius: 12px;
     background: #fafbfc;
@@ -477,15 +596,15 @@ const styles = `
   .checkbox-group {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-top: 4px;
+    gap: 8px;
+    margin-top: 2px;
   }
 
   .checkbox-option {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 14px;
+    gap: 10px;
+    padding: 10px 14px;
     border: 1.5px solid #e5e7eb;
     border-radius: 12px;
     background: #fafbfc;
@@ -540,6 +659,79 @@ const styles = `
     font-weight: 500;
   }
 
+  .progress-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .progress-track {
+    flex: 1;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(135deg, #d9642c 0%, #ec9e3f 100%);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+
+  .progress-text {
+    font-size: 13px;
+    color: #6b7280;
+    font-weight: 600;
+    min-width: 32px;
+    text-align: center;
+  }
+
+  .btn-next {
+    padding: 12px 28px;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #d9642c 0%, #ec9e3f 100%);
+    color: white;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    min-height: 48px;
+    box-shadow: 0 2px 8px rgba(217, 100, 44, 0.3);
+  }
+
+  .btn-next:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(217, 100, 44, 0.35);
+  }
+
+  .btn-next:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .btn-back {
+    padding: 12px 20px;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 12px;
+    background: white;
+    color: #374151;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    min-height: 48px;
+  }
+
+  .btn-back:hover {
+    border-color: #d1d5db;
+    background: #f9fafb;
+  }
+
   .error-msg {
     color: #dc2626;
     font-size: 14px;
@@ -554,8 +746,8 @@ const styles = `
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-top: 24px;
-    padding-top: 20px;
+    margin-top: 16px;
+    padding-top: 14px;
     border-top: 1px solid #f3f4f6;
   }
 
@@ -602,11 +794,11 @@ const styles = `
     }
 
     .form-header h1 {
-      font-size: 26px;
+      font-size: 24px;
     }
 
     .form-card {
-      padding: 36px 32px;
+      padding: 32px 32px;
     }
   }
 `;

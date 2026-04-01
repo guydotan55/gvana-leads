@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLeads, updateLeadCells, VALID_STATUSES } from "@/lib/sheets";
+import { sendCAPIEvent } from "@/lib/capi";
 
 export async function PATCH(
   request: NextRequest,
@@ -43,6 +44,31 @@ export async function PATCH(
     }
 
     await updateLeadCells(lead.sheetTab, rowNum, updates);
+
+    // Fire CAPI events on meaningful status changes
+    if ((status === "relevant" || status === "not_relevant_target") && lead.phone) {
+      sendCAPIEvent({
+        eventName: "CompleteRegistration",
+        phone: lead.phone,
+        leadId: lead.leadId,
+        customData: {
+          content_name: status === "relevant" ? "lead_relevant" : "lead_not_relevant_target",
+          campaign_name: lead.campaignName || undefined,
+        },
+      }).catch((err) => console.error("CAPI CompleteRegistration event failed:", err));
+    }
+
+    if (status === "accepted" && lead.phone) {
+      sendCAPIEvent({
+        eventName: "Purchase",
+        phone: lead.phone,
+        leadId: lead.leadId,
+        customData: {
+          content_name: "lead_accepted",
+          campaign_name: lead.campaignName || undefined,
+        },
+      }).catch((err) => console.error("CAPI Purchase event failed:", err));
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

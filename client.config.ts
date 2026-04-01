@@ -51,6 +51,7 @@ export const clientConfig: ClientConfig = {
     { key: "new", label: "חדש", color: "orange" },
     { key: "relevant", label: "רלוונטי", color: "green" },
     { key: "not_relevant", label: "לא רלוונטי", color: "red" },
+    { key: "not_relevant_target", label: "לא רלוונטי (קהל יעד)", color: "blue" },
     { key: "unavailable", label: "לא זמין", color: "gray" },
   ],
   interviewStatuses: [
