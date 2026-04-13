@@ -73,5 +73,12 @@
   "leads.filter.organic": "Organic",
   "leads.filter.website": "Website",
   "leads.showAnswers": "Show Answers",
-  "leads.hideAnswers": "Hide Answers"
+  "leads.hideAnswers": "Hide Answers",
+  "leads.comment.label": "Internal Note",
+  "leads.comment.add": "Add note",
+  "leads.comment.edit": "Edit note",
+  "leads.comment.placeholder": "Write an internal note about this lead...",
+  "leads.comment.save": "Save note",
+  "leads.comment.cancel": "Cancel",
+  "leads.comment.delete": "Delete note"
 }

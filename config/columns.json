@@ -26,6 +26,7 @@
     "notes":           { "index": 21, "letter": "V", "header": "הערות" },
     "attempts":        { "index": 22, "letter": "W", "header": "ניסיונות" },
     "plan":            { "index": 23, "letter": "X", "header": "תוכנית" },
-    "handledBy":       { "index": 24, "letter": "Y", "header": "טופל ע\"י" }
+    "handledBy":       { "index": 24, "letter": "Y", "header": "טופל ע\"י" },
+    "comment":         { "index": 25, "letter": "Z", "header": "הערה פנימית" }
   }
 }

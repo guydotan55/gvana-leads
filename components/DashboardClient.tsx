@@ -122,6 +122,32 @@ export default function DashboardClient() {
     }
   }
 
+  async function handleCommentChange(lead: Lead, comment: string) {
+    const prevLeads = leads;
+    setLeads((prev) =>
+      prev.map((l) =>
+        l.row === lead.row && l.sheetTab === lead.sheetTab
+          ? { ...l, comment }
+          : l
+      )
+    );
+    skipNextPoll.current = true;
+
+    try {
+      const res = await fetch(`/api/leads/${lead.row}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: lead.status, comment, sheetTab: lead.sheetTab }),
+      });
+      if (!res.ok) throw new Error("Update failed");
+    } catch {
+      setLeads(prevLeads);
+      skipNextPoll.current = false;
+      setUpdateError(t("common.error"));
+      setTimeout(() => setUpdateError(""), 3000);
+    }
+  }
+
   const filteredLeads = useMemo(() => {
     return leads.filter((l) => {
       if (typeFilter && getLeadType(l) !== typeFilter) return false;
@@ -203,6 +229,7 @@ export default function DashboardClient() {
         leads={filteredLeads}
         onStatusChange={handleStatusChange}
         onHandledByChange={handleHandledByChange}
+        onCommentChange={handleCommentChange}
       />
     </div>
   );

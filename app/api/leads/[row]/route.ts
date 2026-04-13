@@ -13,7 +13,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid row" }, { status: 400 });
     }
 
-    const { status, attempts, plan, handledBy, sheetTab } = await request.json();
+    const { status, attempts, plan, handledBy, comment, sheetTab } = await request.json();
 
     if (!status || !VALID_STATUSES.includes(status)) {
       return NextResponse.json(
@@ -41,6 +41,10 @@ export async function PATCH(
 
     if (typeof handledBy === "string") {
       updates.handledBy = handledBy;
+    }
+
+    if (typeof comment === "string") {
+      updates.comment = comment;
     }
 
     await updateLeadCells(lead.sheetTab, rowNum, updates);

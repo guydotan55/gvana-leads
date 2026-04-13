@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@/lib/i18n";
 import { clientConfig } from "@/client.config";
 import type { Lead } from "@/lib/sheets";
@@ -9,6 +9,7 @@ interface LeadTableProps {
   leads: Lead[];
   onStatusChange: (lead: Lead, status: string, attempts?: number, plan?: string) => void;
   onHandledByChange: (lead: Lead, handledBy: string) => void;
+  onCommentChange: (lead: Lead, comment: string) => void;
 }
 
 const statusColorClasses: Record<string, string> = {
@@ -386,16 +387,194 @@ function SortHeader({
   );
 }
 
+/* ---------- Comment Editor ---------- */
+
+function PencilIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </svg>
+  );
+}
+
+function CommentEditor({
+  lead,
+  onChange,
+}: {
+  lead: Lead;
+  onChange: (lead: Lead, comment: string) => void;
+}) {
+  const initial = lead.comment || "";
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(initial);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Resync when lead changes (e.g., after server reconciliation)
+  useEffect(() => {
+    if (!editing) setDraft(initial);
+  }, [initial, editing]);
+
+  // Auto-size the textarea to its content
+  useEffect(() => {
+    if (!editing) return;
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
+  }, [draft, editing]);
+
+  function enterEdit() {
+    setDraft(initial);
+    setEditing(true);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        const len = el.value.length;
+        el.setSelectionRange(len, len);
+      }
+    });
+  }
+
+  function commit() {
+    const next = draft.trim();
+    if (next !== initial.trim()) {
+      onChange(lead, next);
+    }
+    setEditing(false);
+  }
+
+  function cancel() {
+    setDraft(initial);
+    setEditing(false);
+  }
+
+  function clear() {
+    setDraft("");
+    onChange(lead, "");
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div className="relative rounded-lg border border-amber-200 bg-amber-50/70 shadow-sm overflow-hidden">
+        <div className="absolute top-0 bottom-0 start-0 w-[3px] bg-gradient-to-b from-amber-300 to-amber-500" aria-hidden="true" />
+        <div className="ps-3 pe-2 py-2">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <PencilIcon className="text-amber-600" />
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">
+              {t("leads.comment.label")}
+            </span>
+          </div>
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                cancel();
+              } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                commit();
+              }
+            }}
+            rows={2}
+            placeholder={t("leads.comment.placeholder")}
+            className="w-full resize-none bg-transparent text-sm text-amber-950 placeholder:text-amber-400 leading-relaxed focus:outline-none"
+            style={{ fontFamily: "inherit" }}
+          />
+          <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-amber-200/70">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={commit}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 transition-colors"
+              >
+                {t("leads.comment.save")}
+              </button>
+              <button
+                type="button"
+                onClick={cancel}
+                className="inline-flex items-center px-2 py-1 rounded-md text-xs text-amber-800/70 hover:text-amber-900 hover:bg-amber-100 transition-colors"
+              >
+                {t("leads.comment.cancel")}
+              </button>
+            </div>
+            {initial && (
+              <button
+                type="button"
+                onClick={clear}
+                className="text-[11px] text-amber-700/60 hover:text-red-600 transition-colors"
+                title={t("leads.comment.delete")}
+              >
+                {t("leads.comment.delete")}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (initial) {
+    return (
+      <button
+        type="button"
+        onClick={enterEdit}
+        className="group w-full text-start relative rounded-lg border border-amber-200/80 bg-amber-50/60 hover:bg-amber-50 hover:border-amber-300 transition-colors overflow-hidden"
+        title={t("leads.comment.edit")}
+      >
+        <div className="absolute top-0 bottom-0 start-0 w-[3px] bg-gradient-to-b from-amber-300 to-amber-500" aria-hidden="true" />
+        <div className="ps-3 pe-2 py-1.5 flex items-start gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-700/80 shrink-0 pt-0.5">
+            {t("leads.comment.label")}
+          </span>
+          <p className="flex-1 text-sm text-amber-950 whitespace-pre-wrap break-words leading-snug">
+            {initial}
+          </p>
+          <PencilIcon className="text-amber-500/70 group-hover:text-amber-700 transition-colors shrink-0 mt-0.5" />
+        </div>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={enterEdit}
+      className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700/80 hover:text-amber-800 px-2 py-1 rounded-md hover:bg-amber-50 border border-dashed border-amber-300/60 hover:border-amber-400 transition-colors"
+    >
+      <PencilIcon />
+      {t("leads.comment.add")}
+    </button>
+  );
+}
+
 /* ---------- Mobile Card ---------- */
 
 function LeadCard({
   lead,
   onStatusChange,
   onHandledByChange,
+  onCommentChange,
 }: {
   lead: Lead;
   onStatusChange: (lead: Lead, status: string, attempts?: number, plan?: string) => void;
   onHandledByChange: (lead: Lead, handledBy: string) => void;
+  onCommentChange: (lead: Lead, comment: string) => void;
 }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-3">
@@ -414,6 +593,9 @@ function LeadCard({
         <p className="text-xs text-gray-400 mb-1">{t("leads.table.handledBy")}</p>
         <HandledBySelect lead={lead} onChange={onHandledByChange} />
       </div>
+      <div className="pt-1 border-t border-gray-50">
+        <CommentEditor lead={lead} onChange={onCommentChange} />
+      </div>
       {lead.notes && (
         <div className="pt-1 border-t border-gray-50">
           <NotesExpander notes={lead.notes} />
@@ -429,10 +611,12 @@ function DesktopLeadRow({
   lead,
   onStatusChange,
   onHandledByChange,
+  onCommentChange,
 }: {
   lead: Lead;
   onStatusChange: (lead: Lead, status: string, attempts?: number, plan?: string) => void;
   onHandledByChange: (lead: Lead, handledBy: string) => void;
+  onCommentChange: (lead: Lead, comment: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hasNotes = !!lead.notes?.trim();
@@ -440,7 +624,7 @@ function DesktopLeadRow({
 
   return (
     <>
-      <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+      <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors align-top">
         <td className="px-3 py-3">
           <div className="flex items-center gap-1.5">
             <span className="font-medium text-gray-900 text-sm">
@@ -488,10 +672,13 @@ function DesktopLeadRow({
         <td className="px-3 py-3">
           <SourceBadge source={lead.platform} />
         </td>
+        <td className="px-3 py-3 min-w-[220px] max-w-[320px]">
+          <CommentEditor lead={lead} onChange={onCommentChange} />
+        </td>
       </tr>
       {expanded && parsed.length > 0 && (
         <tr className="bg-blue-50/30">
-          <td colSpan={6} className="px-4 py-3">
+          <td colSpan={7} className="px-4 py-3">
             <div className="grid grid-cols-2 gap-3">
               {parsed.map((item, i) => (
                 <div key={i} className="bg-white rounded-lg p-3 border border-gray-100">
@@ -513,6 +700,7 @@ export default function LeadTable({
   leads,
   onStatusChange,
   onHandledByChange,
+  onCommentChange,
 }: LeadTableProps) {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -553,6 +741,7 @@ export default function LeadTable({
                 lead={lead}
                 onStatusChange={onStatusChange}
                 onHandledByChange={onHandledByChange}
+                onCommentChange={onCommentChange}
               />
             ))}
           </div>
@@ -569,6 +758,9 @@ export default function LeadTable({
                     <SortHeader label={t("leads.table.status")} sortKey="status" currentSort={sortKey} currentDir={sortDir} onSort={handleSort} />
                     <SortHeader label={t("leads.table.handledBy")} sortKey="handledBy" currentSort={sortKey} currentDir={sortDir} onSort={handleSort} />
                     <SortHeader label={t("leads.table.source")} sortKey="platform" currentSort={sortKey} currentDir={sortDir} onSort={handleSort} />
+                    <th className="text-start px-3 py-3 text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
+                      {t("leads.comment.label")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -578,6 +770,7 @@ export default function LeadTable({
                       lead={lead}
                       onStatusChange={onStatusChange}
                       onHandledByChange={onHandledByChange}
+                      onCommentChange={onCommentChange}
                     />
                   ))}
                 </tbody>

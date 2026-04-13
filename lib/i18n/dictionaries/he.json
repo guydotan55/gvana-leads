@@ -73,5 +73,12 @@
   "leads.filter.organic": "אורגני",
   "leads.filter.website": "אתר",
   "leads.showAnswers": "הצג תשובות",
-  "leads.hideAnswers": "הסתר תשובות"
+  "leads.hideAnswers": "הסתר תשובות",
+  "leads.comment.label": "הערה פנימית",
+  "leads.comment.add": "הוסף הערה",
+  "leads.comment.edit": "ערוך הערה",
+  "leads.comment.placeholder": "כתוב הערה פנימית על הליד...",
+  "leads.comment.save": "שמור הערה",
+  "leads.comment.cancel": "ביטול",
+  "leads.comment.delete": "מחק הערה"
 }
