@@ -118,7 +118,7 @@ export default function MasaForm() {
               </svg>
             </div>
             <h2>תודה שפנית</h2>
-            <p>קיבלנו את הפרטים. ניצור איתך קשר בימים הקרובים.</p>
+            <p>קיבלנו את הפרטים. ניצור איתך קשר בימים הקרובים כדי לספר על המסע.</p>
           </div>
         </div>
         <style jsx>{styles}</style>
@@ -167,9 +167,9 @@ export default function MasaForm() {
         <header className="form-header">
           <Image src="/logo-color.png" alt="מכינת גוונא" width={48} height={48} className="form-logo" />
           <span className="eyebrow">מכינת גוונא</span>
-          <h1>בוגרים</h1>
+          <h1>מסע משתחררים</h1>
           <p className="subtitle">
-            קהילת הבוגרים של מכינת גוונא — חבורה, מפגשים, וליווי בכל שלב.
+            מסע אחרי הצבא — חבורה, מפגשים, ושיחות שמסדרות את מה שהלאה.
             השאר/י פרטים ונחזור אליך עם כל הפרטים.
           </p>
         </header>

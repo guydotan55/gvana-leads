@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     const formName =
       type === "instructor" ? "טופס מדריכים" :
       type === "tech" ? "תוכנית טכנולוגית" :
-      type === "masa" ? "בוגרים" :
+      type === "masa" ? "מסע משתחררים" :
       "חניכים כללי";
     const campaignName = utmCampaign || "";
 
