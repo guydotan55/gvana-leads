@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Name and phone are required" }, { status: 400 });
     }
 
-    if (!["student", "instructor", "tech"].includes(type)) {
+    if (!["student", "instructor", "tech", "masa"].includes(type)) {
       return NextResponse.json({ error: "Invalid type" }, { status: 400 });
     }
 
@@ -78,7 +78,11 @@ export async function POST(request: NextRequest) {
     // Determine platform from UTM: facebook/instagram = "fb"/"ig", otherwise "organic"
     const isPaid = utmSource === "facebook" || utmSource === "instagram" || utmMedium === "paid";
     const platform = isPaid ? (utmSource || "fb") : "organic";
-    const formName = type === "instructor" ? "טופס מדריכים" : type === "tech" ? "תוכנית טכנולוגית" : "חניכים כללי";
+    const formName =
+      type === "instructor" ? "טופס מדריכים" :
+      type === "tech" ? "תוכנית טכנולוגית" :
+      type === "masa" ? "מסע משתחררים" :
+      "חניכים כללי";
     const campaignName = utmCampaign || "";
 
     // Build notes from extra fields
@@ -129,15 +133,19 @@ export async function POST(request: NextRequest) {
       requestBody: { values: [row] },
     });
 
-    // Fire server-side CAPI Lead event for student and tech form submissions
-    if (type === "tech" || type === "student") {
+    // Fire server-side CAPI Lead event for student, tech, and masa form submissions
+    if (type === "tech" || type === "student" || type === "masa") {
+      const contentName =
+        type === "tech" ? "tech_form" :
+        type === "masa" ? "masa_form" :
+        "student_form";
       sendCAPIEvent({
         eventName: "Lead",
         phone: phone.trim(),
         leadId: organicId,
         sourceUrl: request.headers.get("referer") || undefined,
         customData: {
-          content_name: type === "tech" ? "tech_form" : "student_form",
+          content_name: contentName,
           campaign_name: campaignName || undefined,
         },
       }).catch((err) => console.error("CAPI Lead event failed:", err));

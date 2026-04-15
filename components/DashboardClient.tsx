@@ -10,11 +10,12 @@ const POLL_INTERVAL = 30_000;
 
 const TECH_ADSET_ID = "120240874975730446";
 
-function getLeadType(lead: Lead): "student" | "instructor" | "tech" {
+function getLeadType(lead: Lead): "student" | "instructor" | "tech" | "masa" {
   const name = lead.formName || "";
   const tab = lead.sheetTab || "";
   const combined = name + tab;
   if (combined.includes("מדריך") || combined.includes("מדריכ")) return "instructor";
+  if (combined.includes("מסע משתחררים")) return "masa";
   const rawAdsetId = (lead.adsetId || "").replace(/^as:/, "");
   if (combined.includes("טכנולוגית") || rawAdsetId === TECH_ADSET_ID) return "tech";
   return "student";
@@ -211,6 +212,7 @@ export default function DashboardClient() {
           <option value="">{t("leads.filter.leadType")}: {t("leads.filter.allTypes")}</option>
           <option value="student">{t("leads.filter.students")}</option>
           <option value="tech">{t("leads.filter.tech")}</option>
+          <option value="masa">{t("leads.filter.masa")}</option>
           <option value="instructor">{t("leads.filter.instructors")}</option>
         </select>
         <select
