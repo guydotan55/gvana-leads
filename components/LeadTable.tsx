@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@/lib/i18n";
 import { clientConfig } from "@/client.config";
 import type { Lead } from "@/lib/sheets";
+import { classifyLead, type LeadTypeInfo } from "@/lib/lead-type";
 
 interface LeadTableProps {
   leads: Lead[];
@@ -26,6 +27,30 @@ function getStatusColor(statusKey: string): string {
   const status = clientConfig.statuses.find((s) => s.key === statusKey)
     || clientConfig.interviewStatuses.find((s) => s.key === statusKey);
   return statusColorClasses[status?.color || "gray"] || statusColorClasses.gray;
+}
+
+/* ---------- Lead Type Badge ---------- */
+
+const LEAD_TYPE_STYLES: Record<LeadTypeInfo["kind"], { wrap: string; dot: string }> = {
+  student: { wrap: "bg-indigo-50 text-indigo-700 ring-indigo-100", dot: "bg-indigo-500" },
+  tech: { wrap: "bg-sky-50 text-sky-700 ring-sky-100", dot: "bg-sky-500" },
+  masa: { wrap: "bg-orange-50 text-orange-700 ring-orange-100", dot: "bg-orange-500" },
+  instructor: { wrap: "bg-amber-50 text-amber-800 ring-amber-100", dot: "bg-amber-500" },
+  custom: { wrap: "bg-purple-50 text-purple-700 ring-purple-100", dot: "bg-purple-500" },
+};
+
+function LeadTypeBadge({ lead }: { lead: Lead }) {
+  const info = classifyLead(lead);
+  const style = LEAD_TYPE_STYLES[info.kind];
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full ring-1 text-[11px] font-semibold whitespace-nowrap max-w-[160px] ${style.wrap}`}
+      title={info.label}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${style.dot}`} aria-hidden />
+      <span className="truncate">{info.label}</span>
+    </span>
+  );
 }
 
 function SourceBadge({ source }: { source: string }) {
@@ -701,6 +726,9 @@ function LeadCard({
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
+          <div className="mb-1">
+            <LeadTypeBadge lead={lead} />
+          </div>
           <p className="font-medium text-gray-900 text-sm truncate">{lead.fullName}</p>
           <p className="text-xs text-gray-500 font-mono mt-0.5" dir="ltr">{lead.phone}</p>
         </div>
@@ -751,6 +779,9 @@ function DesktopLeadRow({
   return (
     <>
       <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors align-top">
+        <td className="px-3 py-3 whitespace-nowrap">
+          <LeadTypeBadge lead={lead} />
+        </td>
         <td className="px-3 py-3">
           <div className="flex items-center gap-1.5">
             <span className="font-medium text-gray-900 text-sm">
@@ -807,7 +838,7 @@ function DesktopLeadRow({
       </tr>
       {expanded && parsed.length > 0 && (
         <tr className="bg-blue-50/30">
-          <td colSpan={8} className="px-4 py-3">
+          <td colSpan={9} className="px-4 py-3">
             <div className="grid grid-cols-2 gap-3">
               {parsed.map((item, i) => (
                 <div key={i} className="bg-white rounded-lg p-3 border border-gray-100">
@@ -883,6 +914,9 @@ export default function LeadTable({
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="text-start px-3 py-3 text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
+                      {t("leads.table.leadType")}
+                    </th>
                     <SortHeader label={t("leads.table.name")} sortKey="fullName" currentSort={sortKey} currentDir={sortDir} onSort={handleSort} />
                     <SortHeader label={t("leads.table.phone")} sortKey="phone" currentSort={sortKey} currentDir={sortDir} onSort={handleSort} />
                     <SortHeader label={t("leads.table.date")} sortKey="createdTime" currentSort={sortKey} currentDir={sortDir} onSort={handleSort} />

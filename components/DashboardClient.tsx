@@ -5,21 +5,9 @@ import StatsBar from "./StatsBar";
 import LeadTable from "./LeadTable";
 import { t } from "@/lib/i18n";
 import type { Lead } from "@/lib/sheets";
+import { getCoreLeadType } from "@/lib/lead-type";
 
 const POLL_INTERVAL = 30_000;
-
-const TECH_ADSET_ID = "120240874975730446";
-
-function getLeadType(lead: Lead): "student" | "instructor" | "tech" | "masa" {
-  const name = lead.formName || "";
-  const tab = lead.sheetTab || "";
-  const combined = name + tab;
-  if (combined.includes("מדריך") || combined.includes("מדריכ")) return "instructor";
-  if (combined.includes("מסע משתחררים")) return "masa";
-  const rawAdsetId = (lead.adsetId || "").replace(/^as:/, "");
-  if (combined.includes("טכנולוגית") || rawAdsetId === TECH_ADSET_ID) return "tech";
-  return "student";
-}
 
 function getLeadSource(lead: Lead): "facebook" | "organic" | "paid" | "website" {
   const p = (lead.platform || "").toLowerCase();
@@ -188,7 +176,7 @@ export default function DashboardClient() {
 
   const filteredLeads = useMemo(() => {
     return leads.filter((l) => {
-      if (typeFilter && getLeadType(l) !== typeFilter) return false;
+      if (typeFilter && getCoreLeadType(l) !== typeFilter) return false;
       if (sourceFilter && getLeadSource(l) !== sourceFilter) return false;
       return true;
     });

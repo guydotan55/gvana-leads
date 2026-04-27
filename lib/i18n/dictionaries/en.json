@@ -26,6 +26,7 @@
   "stats.relevant": "Relevant",
   "stats.notRelevant": "Not Relevant",
   "stats.unavailable": "Unavailable",
+  "leads.table.leadType": "Lead Type",
   "leads.table.name": "Name",
   "leads.table.phone": "Phone",
   "leads.table.source": "Source",
