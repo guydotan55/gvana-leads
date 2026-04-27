@@ -26,6 +26,7 @@
   "stats.relevant": "רלוונטיים",
   "stats.notRelevant": "לא רלוונטיים",
   "stats.unavailable": "לא זמינים",
+  "leads.table.leadType": "סוג ליד",
   "leads.table.name": "שם",
   "leads.table.phone": "טלפון",
   "leads.table.source": "מקור",
