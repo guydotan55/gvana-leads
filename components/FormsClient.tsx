@@ -23,21 +23,17 @@ function getLeadType(lead: Lead): FormType {
 }
 
 /**
- * Public origin to embed in shareable URLs. Falls back to current origin in
- * the browser, then a build-time NEXT_PUBLIC override, and finally the
- * canonical production host.
+ * Canonical public origin used for shareable form URLs. Always returns the
+ * production host, even when the dashboard is being viewed on a preview/PR
+ * deployment or the legacy `-five` alias — those URLs are protected or
+ * stale, and pasting them into ads would break form submission for users.
+ *
+ * Override at build time with NEXT_PUBLIC_PUBLIC_BASE_URL once a custom
+ * domain is set up.
  */
 function publicOrigin(): string {
   const envOverride = process.env.NEXT_PUBLIC_PUBLIC_BASE_URL;
   if (envOverride) return envOverride.replace(/\/$/, "");
-  if (typeof window !== "undefined" && window.location?.origin) {
-    const o = window.location.origin;
-    // The legacy `-five` alias is pinned to a stale build; never share it.
-    if (o.includes("gvana-leads-dashboard-five")) {
-      return "https://gvana-leads-dashboard.vercel.app";
-    }
-    return o;
-  }
   return "https://gvana-leads-dashboard.vercel.app";
 }
 
@@ -363,21 +359,28 @@ export default function FormsClient() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [origin, setOrigin] = useState<string>("");
-
-  useEffect(() => {
-    setOrigin(publicOrigin());
-  }, []);
+  const origin = publicOrigin();
 
   const fetchLeads = useCallback(async () => {
     try {
-      const res = await fetch("/api/leads");
-      if (!res.ok) throw new Error("Failed to fetch");
+      const res = await fetch("/api/leads", {
+        credentials: "same-origin",
+        redirect: "manual",
+        headers: { Accept: "application/json" },
+      });
+      if (res.type === "opaqueredirect" || res.status === 0 || (res.status >= 300 && res.status < 400)) {
+        throw new Error(`Auth redirect (${res.status}) — session may have expired, please reload`);
+      }
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status}${body ? `: ${body.slice(0, 120)}` : ""}`);
+      }
       const data = await res.json();
       setLeads(data.leads || []);
       setError("");
-    } catch {
-      setError(t("common.error"));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t("common.error");
+      setError(`${t("common.error")} — ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -419,7 +422,7 @@ export default function FormsClient() {
             key={form.slug}
             form={form}
             stats={loading ? { last7: 0, last30: 0, total: 0, lastSubmissionAt: null } : summarize(leads, form.leadType)}
-            publicBase={origin || "https://gvana-leads-dashboard.vercel.app"}
+            publicBase={origin}
           />
         ))}
       </div>
