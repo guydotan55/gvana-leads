@@ -281,3 +281,33 @@ export async function updateLeadCells(
   );
   await Promise.all(promises);
 }
+
+export async function deleteLead(sheetTab: string, row: number): Promise<void> {
+  const sheets = getSheets();
+  const spreadsheetId = getSheetId();
+
+  const meta = await sheets.spreadsheets.get({ spreadsheetId });
+  const sheet = meta.data.sheets?.find((s) => s.properties?.title === sheetTab);
+  const sheetId = sheet?.properties?.sheetId;
+  if (sheetId === undefined || sheetId === null) {
+    throw new Error(`Sheet tab not found: ${sheetTab}`);
+  }
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: row - 1,
+              endIndex: row,
+            },
+          },
+        },
+      ],
+    },
+  });
+}

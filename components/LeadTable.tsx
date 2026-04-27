@@ -10,6 +10,7 @@ interface LeadTableProps {
   onStatusChange: (lead: Lead, status: string, attempts?: number, plan?: string) => void;
   onHandledByChange: (lead: Lead, handledBy: string) => void;
   onCommentChange: (lead: Lead, comment: string) => void;
+  onDelete: (lead: Lead) => Promise<void> | void;
 }
 
 const statusColorClasses: Record<string, string> = {
@@ -563,6 +564,124 @@ function CommentEditor({
   );
 }
 
+/* ---------- Delete Row Action ---------- */
+
+function DeleteRowAction({
+  lead,
+  onDelete,
+  variant = "icon",
+}: {
+  lead: Lead;
+  onDelete: (lead: Lead) => Promise<void> | void;
+  variant?: "icon" | "icon-sm";
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!confirming) return;
+    function onDocClick(e: MouseEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) {
+        setConfirming(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setConfirming(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [confirming]);
+
+  async function doDelete() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await onDelete(lead);
+    } finally {
+      setBusy(false);
+      setConfirming(false);
+    }
+  }
+
+  if (confirming) {
+    return (
+      <div
+        ref={containerRef}
+        className="inline-flex items-center gap-1 rounded-lg bg-red-50 border border-red-200 px-1.5 py-1"
+        role="group"
+        aria-label={t("leads.delete.button")}
+      >
+        <span className="text-[11px] font-medium text-red-700 px-1 truncate max-w-[120px]">
+          {t("leads.delete.confirmPrefix")} {lead.fullName || "—"}?
+        </span>
+        <button
+          type="button"
+          onClick={doDelete}
+          disabled={busy}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors"
+        >
+          {busy ? (
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="animate-spin">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+          ) : (
+            <TrashIcon size={11} />
+          )}
+          {t("leads.delete.confirmAction")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirming(false)}
+          disabled={busy}
+          className="px-2 py-0.5 rounded-md text-xs font-medium text-gray-600 hover:bg-white transition-colors"
+        >
+          {t("common.cancel")}
+        </button>
+      </div>
+    );
+  }
+
+  const sizeCls = variant === "icon-sm" ? "w-7 h-7" : "w-8 h-8";
+  return (
+    <button
+      type="button"
+      onClick={() => setConfirming(true)}
+      title={t("leads.delete.button")}
+      aria-label={t("leads.delete.button")}
+      className={`group inline-flex items-center justify-center ${sizeCls} rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors`}
+    >
+      <TrashIcon size={14} />
+    </button>
+  );
+}
+
+function TrashIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
+}
+
 /* ---------- Mobile Card ---------- */
 
 function LeadCard({
@@ -570,20 +689,25 @@ function LeadCard({
   onStatusChange,
   onHandledByChange,
   onCommentChange,
+  onDelete,
 }: {
   lead: Lead;
   onStatusChange: (lead: Lead, status: string, attempts?: number, plan?: string) => void;
   onHandledByChange: (lead: Lead, handledBy: string) => void;
   onCommentChange: (lead: Lead, comment: string) => void;
+  onDelete: (lead: Lead) => Promise<void> | void;
 }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="font-medium text-gray-900 text-sm">{lead.fullName}</p>
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-gray-900 text-sm truncate">{lead.fullName}</p>
           <p className="text-xs text-gray-500 font-mono mt-0.5" dir="ltr">{lead.phone}</p>
         </div>
-        <SourceBadge source={lead.platform} />
+        <div className="flex items-center gap-1.5 shrink-0">
+          <SourceBadge source={lead.platform} />
+          <DeleteRowAction lead={lead} onDelete={onDelete} variant="icon-sm" />
+        </div>
       </div>
       <div className="text-xs text-gray-400" dir="ltr">{formatDate(lead.createdTime)}</div>
       <div className="flex flex-col gap-2">
@@ -612,11 +736,13 @@ function DesktopLeadRow({
   onStatusChange,
   onHandledByChange,
   onCommentChange,
+  onDelete,
 }: {
   lead: Lead;
   onStatusChange: (lead: Lead, status: string, attempts?: number, plan?: string) => void;
   onHandledByChange: (lead: Lead, handledBy: string) => void;
   onCommentChange: (lead: Lead, comment: string) => void;
+  onDelete: (lead: Lead) => Promise<void> | void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hasNotes = !!lead.notes?.trim();
@@ -675,10 +801,13 @@ function DesktopLeadRow({
         <td className="px-3 py-3 min-w-[220px] max-w-[320px]">
           <CommentEditor lead={lead} onChange={onCommentChange} />
         </td>
+        <td className="px-2 py-3 w-px whitespace-nowrap text-end">
+          <DeleteRowAction lead={lead} onDelete={onDelete} />
+        </td>
       </tr>
       {expanded && parsed.length > 0 && (
         <tr className="bg-blue-50/30">
-          <td colSpan={7} className="px-4 py-3">
+          <td colSpan={8} className="px-4 py-3">
             <div className="grid grid-cols-2 gap-3">
               {parsed.map((item, i) => (
                 <div key={i} className="bg-white rounded-lg p-3 border border-gray-100">
@@ -701,6 +830,7 @@ export default function LeadTable({
   onStatusChange,
   onHandledByChange,
   onCommentChange,
+  onDelete,
 }: LeadTableProps) {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -742,6 +872,7 @@ export default function LeadTable({
                 onStatusChange={onStatusChange}
                 onHandledByChange={onHandledByChange}
                 onCommentChange={onCommentChange}
+                onDelete={onDelete}
               />
             ))}
           </div>
@@ -761,6 +892,7 @@ export default function LeadTable({
                     <th className="text-start px-3 py-3 text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
                       {t("leads.comment.label")}
                     </th>
+                    <th className="px-2 py-3 w-px" aria-label={t("leads.table.actions")} />
                   </tr>
                 </thead>
                 <tbody>
@@ -771,6 +903,7 @@ export default function LeadTable({
                       onStatusChange={onStatusChange}
                       onHandledByChange={onHandledByChange}
                       onCommentChange={onCommentChange}
+                      onDelete={onDelete}
                     />
                   ))}
                 </tbody>

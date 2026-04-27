@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getLeads, updateLeadCells, VALID_STATUSES } from "@/lib/sheets";
+import { getLeads, updateLeadCells, deleteLead, VALID_STATUSES } from "@/lib/sheets";
 import { sendCAPIEvent } from "@/lib/capi";
 
 export async function PATCH(
@@ -79,6 +79,44 @@ export async function PATCH(
     console.error("Status update failed:", error);
     return NextResponse.json(
       { error: "Failed to update status" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ row: string }> }
+) {
+  try {
+    const { row } = await params;
+    const rowNum = parseInt(row, 10);
+    if (!rowNum || rowNum < 1) {
+      return NextResponse.json({ error: "Invalid row" }, { status: 400 });
+    }
+
+    const { sheetTab, expectedLeadId } = await request.json().catch(() => ({}));
+
+    const leads = await getLeads();
+    const lead = leads.find((l) => l.row === rowNum && (!sheetTab || l.sheetTab === sheetTab));
+    if (!lead) {
+      return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+    }
+
+    if (expectedLeadId && lead.leadId && lead.leadId !== expectedLeadId) {
+      return NextResponse.json(
+        { error: "Lead identity mismatch — refresh and try again" },
+        { status: 409 }
+      );
+    }
+
+    await deleteLead(lead.sheetTab, rowNum);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Lead delete failed:", error);
+    return NextResponse.json(
+      { error: "Failed to delete lead" },
       { status: 500 }
     );
   }

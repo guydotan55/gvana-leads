@@ -123,6 +123,43 @@ export default function DashboardClient() {
     }
   }
 
+  async function handleDelete(lead: Lead) {
+    const prevLeads = leads;
+    setLeads((prev) =>
+      prev
+        .filter((l) => !(l.row === lead.row && l.sheetTab === lead.sheetTab))
+        .map((l) =>
+          l.sheetTab === lead.sheetTab && l.row > lead.row
+            ? { ...l, row: l.row - 1 }
+            : l
+        )
+    );
+    skipNextPoll.current = true;
+
+    try {
+      const res = await fetch(`/api/leads/${lead.row}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sheetTab: lead.sheetTab,
+          expectedLeadId: lead.leadId || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "Delete failed");
+      }
+    } catch (err) {
+      setLeads(prevLeads);
+      skipNextPoll.current = false;
+      const msg = err instanceof Error && err.message.toLowerCase().includes("mismatch")
+        ? t("leads.delete.errorMismatch")
+        : t("leads.delete.errorGeneric");
+      setUpdateError(msg);
+      setTimeout(() => setUpdateError(""), 4000);
+    }
+  }
+
   async function handleCommentChange(lead: Lead, comment: string) {
     const prevLeads = leads;
     setLeads((prev) =>
@@ -232,6 +269,7 @@ export default function DashboardClient() {
         onStatusChange={handleStatusChange}
         onHandledByChange={handleHandledByChange}
         onCommentChange={handleCommentChange}
+        onDelete={handleDelete}
       />
     </div>
   );
