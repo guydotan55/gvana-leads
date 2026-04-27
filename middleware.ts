@@ -3,10 +3,17 @@ import { verifySession, SESSION_COOKIE } from "@/lib/auth";
 
 const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webhooks", "/api/organic-lead", "/api/track", "/form"];
 
+// Public submission endpoint for builder-created forms. CRUD endpoints
+// under /api/forms/[id] stay admin-only.
+const PUBLIC_PATTERNS: RegExp[] = [/^\/api\/forms\/[^/]+\/submit$/];
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+    return NextResponse.next();
+  }
+  if (PUBLIC_PATTERNS.some((re) => re.test(pathname))) {
     return NextResponse.next();
   }
 
