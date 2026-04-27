@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { t } from "@/lib/i18n";
-import { FORMS, type FormConfig, type FormType } from "@/config/forms";
+import { FORMS, type FormConfig, type FormDef, type FormType } from "@/config/forms";
 import type { Lead } from "@/lib/sheets";
 
 const TECH_ADSET_ID = "120240874975730446";
@@ -325,6 +326,151 @@ function FormCard({ form, stats, publicBase }: FormCardProps) {
           </div>
         )}
       </div>
+
+      {/* Clone action */}
+      <div className="border-t border-gray-100 pt-3">
+        <Link
+          href={`/forms/new?clone=${form.slug}`}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+          שכפל לטופס חדש
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+/* ---------- Builder form card (user-created) ---------- */
+
+function BuilderFormCard({
+  def,
+  publicBase,
+  onDelete,
+}: {
+  def: FormDef;
+  publicBase: string;
+  onDelete: (def: FormDef) => Promise<void> | void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const baseUrl = `${publicBase}/form/${def.id}`;
+  const isPublished = def.status === "published";
+
+  async function handleDelete() {
+    setBusy(true);
+    try {
+      await onDelete(def);
+    } finally {
+      setBusy(false);
+      setConfirming(false);
+    }
+  }
+
+  return (
+    <article className="relative bg-white rounded-2xl border border-gray-100 ring-1 ring-gray-100 p-5 sm:p-6 flex flex-col gap-4 shadow-sm transition-all hover:shadow-md">
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+              isPublished ? "bg-green-50 text-green-700 ring-1 ring-green-200" : "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
+            }`}>
+              {isPublished ? "פורסם" : "טיוטה"}
+            </span>
+            <span className="text-[11px] uppercase tracking-wider font-semibold text-gray-400">
+              /form/{def.id}
+            </span>
+          </div>
+          <h2 className="text-lg font-bold text-gray-900 mb-1">{def.title}</h2>
+          {def.subtitle && <p className="text-sm text-gray-600 leading-relaxed">{def.subtitle}</p>}
+        </div>
+        <span className="shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-600">
+          {def.fields.length} שאלות
+        </span>
+      </header>
+
+      {isPublished && (
+        <div>
+          <p className="text-[11px] uppercase tracking-wider font-semibold text-gray-400 mb-1.5">
+            {t("forms.publicUrl")}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <code
+              className="flex-1 min-w-0 truncate font-mono text-xs sm:text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2"
+              dir="ltr"
+              title={baseUrl}
+            >
+              {baseUrl}
+            </code>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <CopyButton text={baseUrl} label={t("forms.copy.url")} />
+              <a
+                href={baseUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={t("forms.openInNewTab")}
+                title={t("forms.openInNewTab")}
+                className="inline-flex items-center justify-center w-9 h-[34px] rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-2 border-t border-gray-100 pt-3">
+        <Link
+          href={`/forms/${def.id}/edit`}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-navy text-white hover:opacity-90 transition-opacity"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+          ערוך
+        </Link>
+        {confirming ? (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-red-700 font-semibold">למחוק את הטופס?</span>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={busy}
+              className="px-2.5 py-1 rounded-md text-xs font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
+            >
+              {busy ? "..." : "מחק"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              disabled={busy}
+              className="px-2.5 py-1 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-100"
+            >
+              ביטול
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            </svg>
+            מחק
+          </button>
+        )}
+      </div>
     </article>
   );
 }
@@ -357,9 +503,28 @@ function UtmField({
 
 export default function FormsClient() {
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [builderForms, setBuilderForms] = useState<FormDef[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const origin = publicOrigin();
+
+  const fetchBuilderForms = useCallback(async () => {
+    try {
+      const res = await fetch("/api/forms", { credentials: "same-origin" });
+      if (!res.ok) return;
+      const data = await res.json();
+      setBuilderForms(data.forms || []);
+    } catch {
+      // non-fatal
+    }
+  }, []);
+
+  const handleDeleteForm = useCallback(async (def: FormDef) => {
+    const res = await fetch(`/api/forms/${def.id}`, { method: "DELETE" });
+    if (res.ok) {
+      setBuilderForms((prev) => prev.filter((f) => f.id !== def.id));
+    }
+  }, []);
 
   const fetchLeads = useCallback(async () => {
     try {
@@ -388,7 +553,8 @@ export default function FormsClient() {
 
   useEffect(() => {
     fetchLeads();
-  }, [fetchLeads]);
+    fetchBuilderForms();
+  }, [fetchLeads, fetchBuilderForms]);
 
   const totals = useMemo(() => {
     const last30 = leads.filter((l) => {
@@ -396,8 +562,8 @@ export default function FormsClient() {
       const ts = Date.parse(l.createdTime);
       return !Number.isNaN(ts) && ts >= daysAgo(30);
     }).length;
-    return { total: leads.length, last30, formCount: FORMS.length };
-  }, [leads]);
+    return { total: leads.length, last30, formCount: FORMS.length + builderForms.length };
+  }, [leads, builderForms]);
 
   return (
     <div className="space-y-6">
@@ -409,6 +575,16 @@ export default function FormsClient() {
         <div className="flex items-center gap-3 text-xs">
           <SummaryStat label={t("forms.summary.forms")} value={totals.formCount} />
           <SummaryStat label={t("forms.summary.last30")} value={loading ? "…" : totals.last30} />
+          <Link
+            href="/forms/new"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white text-sm font-bold shadow-md hover:shadow-lg transition-all"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            צור טופס חדש
+          </Link>
         </div>
       </header>
 
@@ -416,16 +592,41 @@ export default function FormsClient() {
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-        {FORMS.map((form) => (
-          <FormCard
-            key={form.slug}
-            form={form}
-            stats={loading ? { last7: 0, last30: 0, total: 0, lastSubmissionAt: null } : summarize(leads, form.leadType)}
-            publicBase={origin}
-          />
-        ))}
-      </div>
+      {builderForms.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            הטפסים שיצרת
+          </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+            {builderForms.map((def) => (
+              <BuilderFormCard
+                key={def.id}
+                def={def}
+                publicBase={origin}
+                onDelete={handleDeleteForm}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="space-y-3">
+        {builderForms.length > 0 && (
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            טפסי הליבה
+          </h2>
+        )}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+          {FORMS.map((form) => (
+            <FormCard
+              key={form.slug}
+              form={form}
+              stats={loading ? { last7: 0, last30: 0, total: 0, lastSubmissionAt: null } : summarize(leads, form.leadType)}
+              publicBase={origin}
+            />
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

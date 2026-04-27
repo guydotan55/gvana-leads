@@ -206,6 +206,10 @@ export async function getLeads(): Promise<Lead[]> {
   const allLeads: Lead[] = [];
 
   for (const tabName of tabNames) {
+    // Tabs prefixed with `_` are internal (e.g. _forms_meta) and never
+    // contain leads.
+    if (tabName.startsWith("_")) continue;
+
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range: `'${tabName}'!A1:Z`,
