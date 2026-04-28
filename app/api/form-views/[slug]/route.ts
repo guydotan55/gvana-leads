@@ -8,10 +8,19 @@ export async function POST(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const { slug } = await params;
-    if (!slug?.trim()) {
+    const { slug: rawSlug } = await params;
+    if (!rawSlug?.trim()) {
       return NextResponse.json({ error: "Missing slug" }, { status: 400 });
     }
+    // Same defensive decoding as getForm — the Vercel edge sometimes
+    // hands non-ASCII paths through still percent-encoded.
+    let slug = rawSlug;
+    try {
+      slug = decodeURIComponent(rawSlug);
+    } catch {
+      // malformed encoding — fall back to literal
+    }
+    slug = slug.normalize("NFC");
 
     const body = await request.json().catch(() => ({}));
     const source = body?.source === "builder" ? "builder" : "hardcoded";
