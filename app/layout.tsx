@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { clientConfig } from "@/client.config";
 import "./globals.css";
 
@@ -7,6 +7,13 @@ export const metadata: Metadata = {
   icons: {
     icon: "/logo-color.png",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: clientConfig.brand.primary,
 };
 
 export default function RootLayout({

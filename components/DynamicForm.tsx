@@ -244,6 +244,8 @@ function FieldRenderer({
             onChange={(e) => onChange(e.target.value)}
             placeholder={field.placeholder}
             dir="ltr"
+            inputMode="tel"
+            autoComplete="tel"
           />
         </div>
       );
@@ -259,6 +261,10 @@ function FieldRenderer({
             onChange={(e) => onChange(e.target.value)}
             placeholder={field.placeholder}
             dir="ltr"
+            inputMode="email"
+            autoComplete="email"
+            autoCapitalize="off"
+            spellCheck={false}
           />
         </div>
       );
@@ -274,6 +280,7 @@ function FieldRenderer({
             onChange={(e) => onChange(e.target.value)}
             placeholder={field.placeholder}
             dir="ltr"
+            inputMode="numeric"
           />
         </div>
       );
@@ -302,6 +309,7 @@ function FieldRenderer({
             value={String(value || "")}
             onChange={(e) => onChange(e.target.value)}
             placeholder={field.placeholder}
+            autoComplete={field.id === "fullName" ? "name" : undefined}
           />
         </div>
       );
@@ -309,62 +317,149 @@ function FieldRenderer({
 }
 
 const styles = `
+  /* Mobile-first base. Desktop overrides at the bottom. */
   .form-page {
     min-height: 100dvh;
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    padding: 16px 16px 48px;
+    padding: 16px 16px calc(env(safe-area-inset-bottom, 0px) + 32px);
     position: relative;
-    overflow: hidden;
+    overflow-x: hidden;
     background: linear-gradient(160deg, #f0f4f8 0%, #e8edf5 40%, #fdf5ee 100%);
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
   }
-  .bg-decoration { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
-  .bg-blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.15; }
-  .bg-blob-1 { width: 400px; height: 400px; background: #0EA5E9; top: -100px; right: -100px; }
-  .bg-blob-2 { width: 300px; height: 300px; background: #d9642c; bottom: -50px; left: -80px; }
-  .bg-blob-3 { width: 250px; height: 250px; background: #ec9e3f; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+  .bg-decoration { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .bg-blob { position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.12; }
+  .bg-blob-1 { width: 260px; height: 260px; background: #0EA5E9; top: -60px; right: -80px; }
+  .bg-blob-2 { width: 220px; height: 220px; background: #d9642c; bottom: -60px; left: -80px; }
+  .bg-blob-3 { width: 200px; height: 200px; background: #ec9e3f; top: 50%; left: 50%; transform: translate(-50%, -50%); }
   .form-container { position: relative; z-index: 1; width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: 14px; }
+
   .form-header { text-align: center; padding: 8px 0 0; }
-  .form-header h1 { font-size: 22px; font-weight: 700; color: #1d2752; margin: 8px 0 4px; line-height: 1.3; }
-  .subtitle { font-size: 14px; color: #6b7280; margin: 0; line-height: 1.5; }
-  .form-card { background: white; border-radius: 20px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 6px 24px rgba(0,0,0,.06); border: 1px solid rgba(255,255,255,.8); }
+  .form-header h1 { font-size: 22px; font-weight: 700; color: #1d2752; margin: 10px 0 6px; line-height: 1.3; }
+  .subtitle { font-size: 14.5px; color: #6b7280; margin: 0; line-height: 1.55; }
+
+  .form-card {
+    background: white; border-radius: 20px; padding: 20px 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 6px 24px rgba(0,0,0,.06);
+    border: 1px solid rgba(255,255,255,.8);
+  }
   .success-card { text-align: center; padding: 48px 24px; margin-top: 40px; }
   .success-card h2 { font-size: 22px; font-weight: 700; color: #1d2752; margin: 0 0 8px; }
   .success-card p { font-size: 15px; color: #6b7280; margin: 0; }
-  .step-content { display: flex; flex-direction: column; gap: 14px; }
-  .field { display: flex; flex-direction: column; gap: 4px; }
-  .field label { font-size: 14px; font-weight: 600; color: #374151; line-height: 1.5; }
-  .field-hint { font-size: 13px; color: #9ca3af; margin-top: -2px; }
+
+  .step-content { display: flex; flex-direction: column; gap: 16px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 14.5px; font-weight: 600; color: #374151; line-height: 1.5; }
+  .field-hint { font-size: 13.5px; color: #9ca3af; margin-top: -2px; line-height: 1.4; }
+
   .field input, .field textarea {
-    width: 100%; padding: 10px 14px; border: 1.5px solid #e5e7eb; border-radius: 12px;
-    font-size: 16px; color: #1f2937; background: #fafbfc; outline: none; transition: all 0.2s;
-    font-family: inherit; box-sizing: border-box; resize: vertical;
+    width: 100%;
+    padding: 14px 16px;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 12px;
+    font-size: 16px;          /* 16px keeps iOS from auto-zooming on focus */
+    color: #1f2937;
+    background: #fafbfc;
+    outline: none;
+    transition: border-color .2s, background .2s, box-shadow .2s;
+    font-family: inherit;
+    box-sizing: border-box;
+    resize: vertical;
+    -webkit-appearance: none;
+    appearance: none;
+    min-height: 48px;
   }
-  .field input:focus, .field textarea:focus { border-color: #0EA5E9; background: white; box-shadow: 0 0 0 3px rgba(14,165,233,.12); }
-  .field input::placeholder { color: #b0b8c4; }
-  .radio-group, .checkbox-group { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+  .field textarea { min-height: 96px; line-height: 1.5; }
+  .field input:focus, .field textarea:focus {
+    border-color: #0EA5E9; background: white;
+    box-shadow: 0 0 0 3px rgba(14,165,233,.18);
+  }
+  .field input::placeholder, .field textarea::placeholder { color: #b0b8c4; }
+  .field input[type="date"] { padding-block: 12px; }
+
+  /* Radio + checkbox use the whole row as the touch target so it's
+     comfortable on small screens. min-height stays at recommended 52px. */
+  .radio-group, .checkbox-group { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
   .radio-option, .checkbox-option {
-    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px;
+    min-height: 52px;
     border: 1.5px solid #e5e7eb; border-radius: 12px; background: #fafbfc;
-    cursor: pointer; transition: all 0.2s; user-select: none;
+    cursor: pointer; transition: border-color .15s, background .15s, transform .1s;
+    user-select: none;
+    position: relative;
   }
-  .radio-option:hover, .checkbox-option:hover { border-color: #d1d5db; background: #f3f4f6; }
+  .radio-option:active, .checkbox-option:active { transform: scale(0.99); }
+  @media (hover: hover) {
+    .radio-option:hover, .checkbox-option:hover { border-color: #d1d5db; background: #f3f4f6; }
+  }
   .radio-option.selected, .checkbox-option.selected { border-color: #0EA5E9; background: #f0f9ff; }
-  .radio-option input, .checkbox-option input { position: absolute; opacity: 0; width: 0; height: 0; }
-  .radio-circle { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #d1d5db; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; }
+  .radio-option input, .checkbox-option input { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+  .radio-circle, .checkbox-box {
+    width: 24px; height: 24px; flex-shrink: 0;
+    border: 2px solid #d1d5db; display: flex; align-items: center; justify-content: center;
+    transition: border-color .15s, background .15s;
+  }
+  .radio-circle { border-radius: 50%; }
+  .checkbox-box { border-radius: 6px; }
   .radio-option.selected .radio-circle { border-color: #0EA5E9; }
   .radio-dot { width: 12px; height: 12px; border-radius: 50%; background: #0EA5E9; }
-  .radio-label, .checkbox-label { font-size: 15px; color: #374151; font-weight: 500; }
-  .checkbox-box { width: 22px; height: 22px; border-radius: 6px; border: 2px solid #d1d5db; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; }
   .checkbox-option.selected .checkbox-box { background: #0EA5E9; border-color: #0EA5E9; }
   .checkbox-box svg { width: 14px; height: 14px; color: white; }
-  .form-nav { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding-top: 14px; border-top: 1px solid #f3f4f6; }
-  .nav-spacer { flex: 1; }
-  .btn-submit { padding: 12px 28px; border: none; border-radius: 12px; background: linear-gradient(135deg, #d9642c 0%, #ec9e3f 100%); color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.2s; font-family: inherit; min-height: 48px; box-shadow: 0 2px 8px rgba(217,100,44,.3); }
-  .btn-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(217,100,44,.35); }
-  .btn-submit:disabled { opacity: 0.4; cursor: not-allowed; }
-  .error-msg { color: #dc2626; font-size: 14px; text-align: center; margin: 8px 0 0; padding: 8px 12px; background: #fef2f2; border-radius: 8px; }
-  @media (min-width: 640px) { .form-page { padding: 40px 24px 60px; align-items: center; } .form-header h1 { font-size: 26px; } .form-card { padding: 32px; } }
+  .radio-label, .checkbox-label {
+    font-size: 15.5px; color: #374151; font-weight: 500; line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  .form-nav {
+    display: flex; align-items: stretch; gap: 12px;
+    margin-top: 8px; padding-top: 16px; border-top: 1px solid #f3f4f6;
+  }
+  .nav-spacer { display: none; }
+  .btn-submit {
+    flex: 1; width: 100%;
+    padding: 14px 24px;
+    border: none; border-radius: 12px;
+    background: linear-gradient(135deg, #d9642c 0%, #ec9e3f 100%);
+    color: white; font-size: 16.5px; font-weight: 700;
+    cursor: pointer; transition: transform .15s, box-shadow .2s, opacity .2s;
+    font-family: inherit; min-height: 52px;
+    box-shadow: 0 2px 8px rgba(217,100,44,.3);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-submit:active:not(:disabled) { transform: translateY(1px); }
+  @media (hover: hover) {
+    .btn-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(217,100,44,.35); }
+  }
+  .btn-submit:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+
+  .error-msg {
+    color: #dc2626; font-size: 14px; text-align: center;
+    margin: 8px 0 0; padding: 10px 12px;
+    background: #fef2f2; border: 1px solid #fee2e2; border-radius: 10px;
+  }
+
+  /* Tablet and up */
+  @media (min-width: 640px) {
+    .form-page { padding: 40px 24px 60px; align-items: center; }
+    .form-header h1 { font-size: 26px; }
+    .form-card { padding: 32px; }
+    .bg-blob-1 { width: 360px; height: 360px; right: -100px; }
+    .bg-blob-2 { width: 280px; height: 280px; }
+    .bg-blob-3 { width: 240px; height: 240px; }
+    .form-nav { align-items: center; }
+    .nav-spacer { display: block; flex: 1; }
+    .btn-submit { flex: initial; width: auto; padding: 14px 32px; min-width: 160px; }
+  }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .radio-option, .checkbox-option, .btn-submit, .field input, .field textarea {
+      transition: none;
+    }
+  }
 `;
