@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import type { FormDef, FormField } from "@/config/forms";
+import { useFormView } from "@/lib/use-form-view";
 
 interface Props {
   form: FormDef;
@@ -12,6 +13,7 @@ interface Props {
 type FieldValue = string | string[];
 
 export default function DynamicForm({ form }: Props) {
+  useFormView(form.id, "builder");
   const searchParams = useSearchParams();
   const utmSource = searchParams.get("utm_source") || "";
   const utmMedium = searchParams.get("utm_medium") || "";

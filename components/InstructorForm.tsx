@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
+import { useFormView } from "@/lib/use-form-view";
 
 const STEPS = [
   { id: 1, title: "פרטים אישיים" },
@@ -18,6 +19,7 @@ const JOB_DESCRIPTION = `המשרה היא משרה מלאה, כוללת מגו�
 const JOB_QUESTION = `האם את/ה מרגיש/ה שזה התפקיד שאת/ה מחפש/ת? האם יש שאלות כלשהן בנושא? מה יהיה חשוב לך לבדוק?`;
 
 export default function InstructorForm() {
+  useFormView("instructor", "hardcoded");
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
