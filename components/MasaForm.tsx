@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Script from "next/script";
 import Image from "next/image";
+import { useFormView } from "@/lib/use-form-view";
 
 const FB_PIXEL_ID = "775454794700271";
 
@@ -40,6 +41,7 @@ const MONTHS = [
 ];
 
 export default function MasaForm() {
+  useFormView("masa", "hardcoded");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState("");

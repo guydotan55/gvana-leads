@@ -3,25 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { t } from "@/lib/i18n";
-import { FORMS, type FormConfig, type FormDef, type FormType } from "@/config/forms";
-import type { Lead } from "@/lib/sheets";
-
-const TECH_ADSET_ID = "120240874975730446";
-
-/**
- * Mirrors DashboardClient.getLeadType so we can attribute leads to forms
- * without changing the source of truth.
- */
-function getLeadType(lead: Lead): FormType {
-  const name = lead.formName || "";
-  const tab = lead.sheetTab || "";
-  const combined = name + tab;
-  if (combined.includes("מדריך") || combined.includes("מדריכ")) return "instructor";
-  if (combined.includes("מסע משתחררים")) return "masa";
-  const rawAdsetId = (lead.adsetId || "").replace(/^as:/, "");
-  if (combined.includes("טכנולוגית") || rawAdsetId === TECH_ADSET_ID) return "tech";
-  return "student";
-}
+import { FORMS, type FormConfig, type FormDef } from "@/config/forms";
 
 /**
  * Canonical public origin used for shareable form URLs. Always returns the
@@ -38,58 +20,27 @@ function publicOrigin(): string {
   return "https://gvana-leads-dashboard.vercel.app";
 }
 
-function daysAgo(n: number): number {
-  return Date.now() - n * 24 * 60 * 60 * 1000;
-}
+type Range = "7d" | "30d";
 
-interface FormStats {
-  last30: number;
-  last7: number;
-  total: number;
+interface FormStat {
+  views7d: number;
+  views30d: number;
+  subs7d: number;
+  subs30d: number;
   lastSubmissionAt: string | null;
 }
 
-function summarize(leads: Lead[], formType: FormType): FormStats {
-  const t30 = daysAgo(30);
-  const t7 = daysAgo(7);
-  let last30 = 0;
-  let last7 = 0;
-  let total = 0;
-  let latest: number | null = null;
-  let latestIso: string | null = null;
-  for (const lead of leads) {
-    if (getLeadType(lead) !== formType) continue;
-    total += 1;
-    if (!lead.createdTime) continue;
-    const ts = Date.parse(lead.createdTime);
-    if (Number.isNaN(ts)) continue;
-    if (ts >= t30) last30 += 1;
-    if (ts >= t7) last7 += 1;
-    if (latest === null || ts > latest) {
-      latest = ts;
-      latestIso = lead.createdTime;
-    }
-  }
-  return { last30, last7, total, lastSubmissionAt: latestIso };
+function pickRange(stat: FormStat | undefined, range: Range): { views: number; subs: number } {
+  if (!stat) return { views: 0, subs: 0 };
+  return range === "7d"
+    ? { views: stat.views7d, subs: stat.subs7d }
+    : { views: stat.views30d, subs: stat.subs30d };
 }
 
-function formatRelative(iso: string | null): string {
-  if (!iso) return "—";
-  const ts = Date.parse(iso);
-  if (Number.isNaN(ts)) return "—";
-  const diffMs = Date.now() - ts;
-  const day = 24 * 60 * 60 * 1000;
-  const hour = 60 * 60 * 1000;
-  const minute = 60 * 1000;
-  if (diffMs < minute) return "לפני רגע";
-  if (diffMs < hour) return `לפני ${Math.floor(diffMs / minute)} דקות`;
-  if (diffMs < day) return `לפני ${Math.floor(diffMs / hour)} שעות`;
-  if (diffMs < 7 * day) return `לפני ${Math.floor(diffMs / day)} ימים`;
-  return new Date(ts).toLocaleDateString("he-IL", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-  });
+function formatConversion(views: number, subs: number): string {
+  if (views === 0) return "—";
+  const pct = (subs / views) * 100;
+  return `${pct.toFixed(pct >= 10 ? 0 : 1)}%`;
 }
 
 const ACCENT_CLASS: Record<FormConfig["accent"], { ring: string; bg: string; text: string; chip: string }> = {
@@ -181,11 +132,12 @@ function StatusDot({ active }: { active: boolean }) {
 
 interface FormCardProps {
   form: FormConfig;
-  stats: FormStats;
+  stat: FormStat | undefined;
+  range: Range;
   publicBase: string;
 }
 
-function FormCard({ form, stats, publicBase }: FormCardProps) {
+function FormCard({ form, stat, range, publicBase }: FormCardProps) {
   const [showUtm, setShowUtm] = useState(false);
   const [utmSource, setUtmSource] = useState("facebook");
   const [utmMedium, setUtmMedium] = useState("paid");
@@ -193,7 +145,8 @@ function FormCard({ form, stats, publicBase }: FormCardProps) {
 
   const accent = ACCENT_CLASS[form.accent];
   const baseUrl = `${publicBase}/form/${form.slug}`;
-  const isActive = stats.last7 > 0;
+  const { views, subs } = pickRange(stat, range);
+  const isActive = (stat?.subs7d || 0) > 0 || (stat?.views7d || 0) > 0;
 
   const utmUrl = useMemo(() => {
     const params = new URLSearchParams();
@@ -228,18 +181,16 @@ function FormCard({ form, stats, publicBase }: FormCardProps) {
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-2 text-center bg-white/70 rounded-xl border border-gray-100 px-2 py-3">
         <div>
-          <p className="text-[11px] text-gray-500 mb-0.5">{t("forms.stats.last7")}</p>
-          <p className={`text-lg font-bold ${accent.text}`}>{stats.last7}</p>
+          <p className="text-[11px] text-gray-500 mb-0.5">{t("forms.metrics.views")}</p>
+          <p className="text-lg font-bold text-gray-900">{views}</p>
         </div>
         <div className="border-x border-gray-100">
-          <p className="text-[11px] text-gray-500 mb-0.5">{t("forms.stats.last30")}</p>
-          <p className="text-lg font-bold text-gray-900">{stats.last30}</p>
+          <p className="text-[11px] text-gray-500 mb-0.5">{t("forms.metrics.submissions")}</p>
+          <p className={`text-lg font-bold ${accent.text}`}>{subs}</p>
         </div>
         <div>
-          <p className="text-[11px] text-gray-500 mb-0.5">{t("forms.stats.lastSubmission")}</p>
-          <p className="text-xs font-medium text-gray-700 leading-tight pt-1">
-            {formatRelative(stats.lastSubmissionAt)}
-          </p>
+          <p className="text-[11px] text-gray-500 mb-0.5">{t("forms.metrics.conversion")}</p>
+          <p className="text-lg font-bold text-gray-900">{formatConversion(views, subs)}</p>
         </div>
       </div>
 
@@ -348,10 +299,14 @@ function FormCard({ form, stats, publicBase }: FormCardProps) {
 
 function BuilderFormCard({
   def,
+  stat,
+  range,
   publicBase,
   onDelete,
 }: {
   def: FormDef;
+  stat: FormStat | undefined;
+  range: Range;
   publicBase: string;
   onDelete: (def: FormDef) => Promise<void> | void;
 }) {
@@ -359,6 +314,7 @@ function BuilderFormCard({
   const [busy, setBusy] = useState(false);
   const baseUrl = `${publicBase}/form/${def.id}`;
   const isPublished = def.status === "published";
+  const { views, subs } = pickRange(stat, range);
 
   async function handleDelete() {
     setBusy(true);
@@ -391,6 +347,23 @@ function BuilderFormCard({
           {def.fields.length} שאלות
         </span>
       </header>
+
+      {isPublished && (
+        <div className="grid grid-cols-3 gap-2 text-center bg-gray-50 rounded-xl border border-gray-100 px-2 py-3">
+          <div>
+            <p className="text-[11px] text-gray-500 mb-0.5">{t("forms.metrics.views")}</p>
+            <p className="text-lg font-bold text-gray-900">{views}</p>
+          </div>
+          <div className="border-x border-gray-100">
+            <p className="text-[11px] text-gray-500 mb-0.5">{t("forms.metrics.submissions")}</p>
+            <p className="text-lg font-bold text-purple-700">{subs}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-500 mb-0.5">{t("forms.metrics.conversion")}</p>
+            <p className="text-lg font-bold text-gray-900">{formatConversion(views, subs)}</p>
+          </div>
+        </div>
+      )}
 
       {isPublished && (
         <div>
@@ -502,10 +475,11 @@ function UtmField({
 }
 
 export default function FormsClient() {
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [stats, setStats] = useState<Record<string, FormStat>>({});
   const [builderForms, setBuilderForms] = useState<FormDef[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [range, setRange] = useState<Range>("30d");
   const origin = publicOrigin();
 
   const fetchBuilderForms = useCallback(async () => {
@@ -526,9 +500,9 @@ export default function FormsClient() {
     }
   }, []);
 
-  const fetchLeads = useCallback(async () => {
+  const fetchStats = useCallback(async () => {
     try {
-      const res = await fetch("/api/leads", {
+      const res = await fetch("/api/form-stats", {
         credentials: "same-origin",
         redirect: "manual",
         headers: { Accept: "application/json" },
@@ -541,7 +515,7 @@ export default function FormsClient() {
         throw new Error(`HTTP ${res.status}${body ? `: ${body.slice(0, 120)}` : ""}`);
       }
       const data = await res.json();
-      setLeads(data.leads || []);
+      setStats(data.stats || {});
       setError("");
     } catch (err) {
       const msg = err instanceof Error ? err.message : t("common.error");
@@ -552,18 +526,17 @@ export default function FormsClient() {
   }, []);
 
   useEffect(() => {
-    fetchLeads();
+    fetchStats();
     fetchBuilderForms();
-  }, [fetchLeads, fetchBuilderForms]);
+  }, [fetchStats, fetchBuilderForms]);
 
   const totals = useMemo(() => {
-    const last30 = leads.filter((l) => {
-      if (!l.createdTime) return false;
-      const ts = Date.parse(l.createdTime);
-      return !Number.isNaN(ts) && ts >= daysAgo(30);
-    }).length;
-    return { total: leads.length, last30, formCount: FORMS.length + builderForms.length };
-  }, [leads, builderForms]);
+    let totalSubs = 0;
+    for (const slug of Object.keys(stats)) {
+      totalSubs += range === "7d" ? stats[slug].subs7d : stats[slug].subs30d;
+    }
+    return { totalSubs, formCount: FORMS.length + builderForms.length };
+  }, [stats, builderForms, range]);
 
   return (
     <div className="space-y-6">
@@ -573,8 +546,12 @@ export default function FormsClient() {
           <p className="text-sm text-gray-500 mt-1">{t("forms.subtitle")}</p>
         </div>
         <div className="flex items-center gap-3 text-xs">
+          <RangeToggle range={range} onChange={setRange} />
           <SummaryStat label={t("forms.summary.forms")} value={totals.formCount} />
-          <SummaryStat label={t("forms.summary.last30")} value={loading ? "…" : totals.last30} />
+          <SummaryStat
+            label={range === "7d" ? `${t("forms.metrics.submissions")} · ${t("forms.range.7d")}` : `${t("forms.metrics.submissions")} · ${t("forms.range.30d")}`}
+            value={loading ? "…" : totals.totalSubs}
+          />
           <Link
             href="/forms/new"
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white text-sm font-bold shadow-md hover:shadow-lg transition-all"
@@ -602,6 +579,8 @@ export default function FormsClient() {
               <BuilderFormCard
                 key={def.id}
                 def={def}
+                stat={stats[def.id]}
+                range={range}
                 publicBase={origin}
                 onDelete={handleDeleteForm}
               />
@@ -621,12 +600,32 @@ export default function FormsClient() {
             <FormCard
               key={form.slug}
               form={form}
-              stats={loading ? { last7: 0, last30: 0, total: 0, lastSubmissionAt: null } : summarize(leads, form.leadType)}
+              stat={stats[form.slug]}
+              range={range}
               publicBase={origin}
             />
           ))}
         </div>
       </section>
+    </div>
+  );
+}
+
+function RangeToggle({ range, onChange }: { range: Range; onChange: (r: Range) => void }) {
+  return (
+    <div className="inline-flex items-center bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
+      {(["7d", "30d"] as const).map((r) => (
+        <button
+          key={r}
+          type="button"
+          onClick={() => onChange(r)}
+          className={`px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
+            range === r ? "bg-brand-navy text-white shadow-sm" : "text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          {r === "7d" ? t("forms.range.7d") : t("forms.range.30d")}
+        </button>
+      ))}
     </div>
   );
 }
