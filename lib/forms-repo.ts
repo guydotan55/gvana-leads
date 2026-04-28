@@ -194,6 +194,106 @@ export async function listFormSlugs(): Promise<{ id: string; title: string; stat
   return all.map((f) => ({ id: f.id, title: f.title, status: f.status }));
 }
 
+/**
+ * Find sheet tabs that are NOT registered in `_forms_meta` and aren't
+ * one of the known legacy / system tabs. These are likely leftover
+ * submission tabs from forms deleted before delete-time cleanup was
+ * implemented.
+ */
+const KNOWN_TAB_NAMES: ReadonlySet<string> = new Set([
+  "לידים",
+  "אורגני",
+  "תוכנית טכנולוגית",
+  "מסע משתחררים",
+  "טופס מדריכים",
+  "חניכים כללי",
+]);
+
+export interface OrphanTab {
+  title: string;
+  sheetId: number;
+  dataRows: number;
+}
+
+export async function findOrphanedSubmissionTabs(): Promise<OrphanTab[]> {
+  const sheets = getSheets();
+  const spreadsheetId = getSheetId();
+  await ensureTab(sheets, spreadsheetId, META_TAB, META_HEADERS);
+
+  const meta = await sheets.spreadsheets.get({ spreadsheetId });
+  const tabs = (meta.data.sheets || []).map((s) => s.properties).filter((p) => p && p.sheetId != null);
+
+  const registered = new Set((await listForms()).map((f) => f.sheetTab));
+
+  const orphans: OrphanTab[] = [];
+  for (const t of tabs) {
+    const title = t!.title || "";
+    if (!title) continue;
+    if (title.startsWith("_")) continue; // already system / archived
+    if (KNOWN_TAB_NAMES.has(title)) continue;
+    if (registered.has(title)) continue;
+    // Anything left here is an unknown tab — likely an orphan.
+    let dataRows = 0;
+    try {
+      const r = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${title}'!A:A`,
+      });
+      const rows = (r.data.values as string[][] | undefined) || [];
+      dataRows = rows.filter((row) => row[0]?.trim() && row[0].trim() !== "id").length;
+    } catch {
+      // ignore — treat as 0 rows
+    }
+    orphans.push({ title, sheetId: t!.sheetId!, dataRows });
+  }
+  return orphans;
+}
+
+export interface ReconcileResult {
+  scanned: number;
+  deleted: string[];
+  archived: { from: string; to: string }[];
+}
+
+export async function reconcileOrphanedTabs(): Promise<ReconcileResult> {
+  const sheets = getSheets();
+  const spreadsheetId = getSheetId();
+  const orphans = await findOrphanedSubmissionTabs();
+
+  const deleted: string[] = [];
+  const archived: { from: string; to: string }[] = [];
+  const today = new Date().toISOString().slice(0, 10);
+
+  for (const orphan of orphans) {
+    if (orphan.dataRows === 0) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests: [{ deleteSheet: { sheetId: orphan.sheetId } }] },
+      });
+      deleted.push(orphan.title);
+    } else {
+      const archivedBase = `_archived_${orphan.title}_${today}`.slice(0, 95);
+      const archivedName = await uniqueTabName(sheets, spreadsheetId, archivedBase);
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              updateSheetProperties: {
+                properties: { sheetId: orphan.sheetId, title: archivedName },
+                fields: "title",
+              },
+            },
+          ],
+        },
+      });
+      archived.push({ from: orphan.title, to: archivedName });
+    }
+  }
+
+  return { scanned: orphans.length, deleted, archived };
+}
+
 function slugify(input: string): string {
   // Normalize first so the same visual title always maps to the same slug,
   // regardless of NFC/NFD source (browsers and OS keyboards can produce
@@ -341,20 +441,37 @@ export async function updateForm(id: string, input: UpdateFormInput): Promise<Fo
   return updated;
 }
 
-export async function deleteForm(id: string): Promise<void> {
+/**
+ * Delete a builder-form definition AND clean up its submission tab.
+ *
+ * Behavior:
+ *  - The row in `_forms_meta` is always removed.
+ *  - The per-form submission tab is then handled based on its content:
+ *    - Empty (header row only, or fewer than `MIN_KEEP_ROWS` data rows)
+ *      → tab is deleted entirely. Pure cleanup, no data loss.
+ *    - Has real submissions → tab is renamed with an `_archived_` prefix
+ *      so the dashboard's `_*` filter hides it but the data is preserved
+ *      and recoverable. The user sees the sheet "auto-sync" with the
+ *      dashboard while never losing real lead data.
+ */
+export async function deleteForm(id: string): Promise<{ tabAction: "deleted" | "archived" | "kept"; archivedTab?: string }> {
   const sheets = getSheets();
   const spreadsheetId = getSheetId();
 
   const found = await findRowByFormId(sheets, spreadsheetId, id);
-  if (!found) return;
+  if (!found) return { tabAction: "kept" };
+
+  const def = rowToFormDef(found.row);
+  const formSheetTab = def?.sheetTab || "";
 
   const meta = await sheets.spreadsheets.get({ spreadsheetId });
   const metaSheet = meta.data.sheets?.find((s) => s.properties?.title === META_TAB);
-  const sheetId = metaSheet?.properties?.sheetId;
-  if (sheetId === undefined || sheetId === null) {
+  const metaSheetId = metaSheet?.properties?.sheetId;
+  if (metaSheetId === undefined || metaSheetId === null) {
     throw new Error("Meta tab missing");
   }
 
+  // Step 1: remove the meta row.
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
@@ -362,7 +479,7 @@ export async function deleteForm(id: string): Promise<void> {
         {
           deleteDimension: {
             range: {
-              sheetId,
+              sheetId: metaSheetId,
               dimension: "ROWS",
               startIndex: found.rowNumber - 1,
               endIndex: found.rowNumber,
@@ -372,8 +489,55 @@ export async function deleteForm(id: string): Promise<void> {
       ],
     },
   });
-  // Submission tab is intentionally retained — submitted leads still
-  // matter even if the form is decommissioned.
+
+  // Step 2: clean up the submission tab if it exists.
+  const submissionSheet = formSheetTab
+    ? meta.data.sheets?.find((s) => s.properties?.title === formSheetTab)
+    : undefined;
+  if (!submissionSheet || submissionSheet.properties?.sheetId == null) {
+    return { tabAction: "kept" };
+  }
+  const submissionSheetId = submissionSheet.properties.sheetId;
+
+  // Read just column A to count data rows (rows where A is non-empty
+  // and isn't the literal "id" header).
+  const colA = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `'${formSheetTab}'!A:A`,
+  });
+  const rows = (colA.data.values as string[][] | undefined) || [];
+  const dataRows = rows.filter((r) => r[0]?.trim() && r[0].trim() !== "id").length;
+
+  if (dataRows === 0) {
+    // Empty tab — safe to delete.
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{ deleteSheet: { sheetId: submissionSheetId } }],
+      },
+    });
+    return { tabAction: "deleted" };
+  }
+
+  // Has data — rename with `_archived_<title>_<YYYY-MM-DD>` so it stays
+  // in the sheet but is hidden from the dashboard (which skips `_*`).
+  const today = new Date().toISOString().slice(0, 10);
+  const archivedBase = `_archived_${formSheetTab}_${today}`.slice(0, 95); // sheet titles cap at 100 chars
+  const archivedName = await uniqueTabName(sheets, spreadsheetId, archivedBase);
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: { sheetId: submissionSheetId, title: archivedName },
+            fields: "title",
+          },
+        },
+      ],
+    },
+  });
+  return { tabAction: "archived", archivedTab: archivedName };
 }
 
 export interface SubmissionInput {

@@ -474,9 +474,17 @@ function UtmField({
   );
 }
 
+interface OrphanTab {
+  title: string;
+  sheetId: number;
+  dataRows: number;
+}
+
 export default function FormsClient() {
   const [stats, setStats] = useState<Record<string, FormStat>>({});
   const [builderForms, setBuilderForms] = useState<FormDef[]>([]);
+  const [orphans, setOrphans] = useState<OrphanTab[]>([]);
+  const [reconciling, setReconciling] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [range, setRange] = useState<Range>("30d");
@@ -493,12 +501,47 @@ export default function FormsClient() {
     }
   }, []);
 
+  const fetchOrphans = useCallback(async () => {
+    try {
+      const res = await fetch("/api/forms/reconcile", { credentials: "same-origin" });
+      if (!res.ok) return;
+      const data = await res.json();
+      setOrphans(data.orphans || []);
+    } catch {
+      // non-fatal
+    }
+  }, []);
+
   const handleDeleteForm = useCallback(async (def: FormDef) => {
     const res = await fetch(`/api/forms/${def.id}`, { method: "DELETE" });
     if (res.ok) {
       setBuilderForms((prev) => prev.filter((f) => f.id !== def.id));
+      fetchOrphans();
     }
-  }, []);
+  }, [fetchOrphans]);
+
+  const handleReconcile = useCallback(async () => {
+    if (reconciling) return;
+    const empty = orphans.filter((o) => o.dataRows === 0).length;
+    const withData = orphans.length - empty;
+    const message = `נמצאו ${orphans.length} טפסים יתומים בגיליון.\n\n` +
+      `• ${empty} ימחקו לחלוטין (ללא נתונים)\n` +
+      `• ${withData} יועברו לארכיון (יש בהם הגשות — יוסתרו אבל יישמרו)\n\n` +
+      `להמשיך?`;
+    if (!window.confirm(message)) return;
+    setReconciling(true);
+    try {
+      const res = await fetch("/api/forms/reconcile", { method: "POST", credentials: "same-origin" });
+      if (!res.ok) throw new Error("reconcile failed");
+      const data = await res.json();
+      window.alert(`✅ סיום ניקוי\n\nנמחקו: ${data.deleted?.length || 0}\nאורכבו: ${data.archived?.length || 0}`);
+      setOrphans([]);
+    } catch {
+      window.alert("שגיאה בניקוי, נסה שוב");
+    } finally {
+      setReconciling(false);
+    }
+  }, [orphans, reconciling]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -528,7 +571,8 @@ export default function FormsClient() {
   useEffect(() => {
     fetchStats();
     fetchBuilderForms();
-  }, [fetchStats, fetchBuilderForms]);
+    fetchOrphans();
+  }, [fetchStats, fetchBuilderForms, fetchOrphans]);
 
   const totals = useMemo(() => {
     let totalSubs = 0;
@@ -567,6 +611,43 @@ export default function FormsClient() {
 
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+      )}
+
+      {orphans.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-amber-900">
+              נמצאו {orphans.length} טאבים בגיליון שלא קשורים לטפסים פעילים
+            </p>
+            <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+              ככל הנראה נשארו מטפסים שנמחקו. ניתן לנקות אותם — טאבים ריקים יימחקו, טאבים עם הגשות יועברו לארכיון (יוסתרו מהדאשבורד אך יישמרו).
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+              {orphans.slice(0, 6).map((o) => (
+                <li key={o.title} className="inline-flex items-center gap-1 px-2 py-0.5 bg-white rounded-md border border-amber-200 text-amber-800">
+                  <span className="font-mono">{o.title}</span>
+                  <span className="text-amber-500">·</span>
+                  <span>{o.dataRows === 0 ? "ריק" : `${o.dataRows} הגשות`}</span>
+                </li>
+              ))}
+              {orphans.length > 6 && (
+                <li className="inline-flex items-center px-2 py-0.5 text-amber-700">+{orphans.length - 6}</li>
+              )}
+            </ul>
+          </div>
+          <button
+            type="button"
+            onClick={handleReconcile}
+            disabled={reconciling}
+            className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-bold shadow-sm hover:bg-amber-700 disabled:opacity-50 transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            </svg>
+            {reconciling ? "מנקה..." : "נקה טפסים יתומים"}
+          </button>
+        </div>
       )}
 
       {builderForms.length > 0 && (
