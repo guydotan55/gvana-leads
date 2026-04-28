@@ -255,10 +255,18 @@ export interface ReconcileResult {
   archived: { from: string; to: string }[];
 }
 
-export async function reconcileOrphanedTabs(): Promise<ReconcileResult> {
+/**
+ * Clean up orphan submission tabs.
+ *  - When `onlyTitles` is undefined → all orphans are processed.
+ *  - When `onlyTitles` is an array  → only orphans whose title is in
+ *    that array get processed; others are left alone.
+ */
+export async function reconcileOrphanedTabs(onlyTitles?: string[]): Promise<ReconcileResult> {
   const sheets = getSheets();
   const spreadsheetId = getSheetId();
-  const orphans = await findOrphanedSubmissionTabs();
+  const allOrphans = await findOrphanedSubmissionTabs();
+  const filter = onlyTitles && onlyTitles.length > 0 ? new Set(onlyTitles) : null;
+  const orphans = filter ? allOrphans.filter((o) => filter.has(o.title)) : allOrphans;
 
   const deleted: string[] = [];
   const archived: { from: string; to: string }[] = [];

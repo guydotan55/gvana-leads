@@ -520,28 +520,57 @@ export default function FormsClient() {
     }
   }, [fetchOrphans]);
 
-  const handleReconcile = useCallback(async () => {
+  const reconcileTitles = useCallback(async (titles?: string[]): Promise<void> => {
     if (reconciling) return;
-    const empty = orphans.filter((o) => o.dataRows === 0).length;
-    const withData = orphans.length - empty;
-    const message = `נמצאו ${orphans.length} טפסים יתומים בגיליון.\n\n` +
-      `• ${empty} ימחקו לחלוטין (ללא נתונים)\n` +
-      `• ${withData} יועברו לארכיון (יש בהם הגשות — יוסתרו אבל יישמרו)\n\n` +
-      `להמשיך?`;
-    if (!window.confirm(message)) return;
     setReconciling(true);
     try {
-      const res = await fetch("/api/forms/reconcile", { method: "POST", credentials: "same-origin" });
+      const res = await fetch("/api/forms/reconcile", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(titles ? { titles } : {}),
+      });
       if (!res.ok) throw new Error("reconcile failed");
       const data = await res.json();
-      window.alert(`✅ סיום ניקוי\n\nנמחקו: ${data.deleted?.length || 0}\nאורכבו: ${data.archived?.length || 0}`);
-      setOrphans([]);
+      const cleared = new Set<string>([
+        ...(data.deleted || []),
+        ...(((data.archived || []) as { from: string }[]).map((a) => a.from)),
+      ]);
+      setOrphans((prev) => prev.filter((o) => !cleared.has(o.title)));
+      const numDel = data.deleted?.length || 0;
+      const numArc = data.archived?.length || 0;
+      const action =
+        numDel && numArc ? `נמחקו ${numDel}, אורכבו ${numArc}` :
+        numDel ? `נמחקו ${numDel}` :
+        numArc ? `אורכבו ${numArc}` :
+        "לא בוצעו פעולות";
+      window.alert(`✅ ${action}`);
     } catch {
       window.alert("שגיאה בניקוי, נסה שוב");
     } finally {
       setReconciling(false);
     }
-  }, [orphans, reconciling]);
+  }, [reconciling]);
+
+  const handleReconcileAll = useCallback(async () => {
+    if (orphans.length === 0) return;
+    const empty = orphans.filter((o) => o.dataRows === 0).length;
+    const withData = orphans.length - empty;
+    const message =
+      `לנקות את כל ${orphans.length} הטפסים היתומים?\n\n` +
+      `• ${empty} ימחקו לגמרי (ריקים)\n` +
+      `• ${withData} יועברו לארכיון (יש בהם הגשות — יוסתרו אבל יישמרו)`;
+    if (!window.confirm(message)) return;
+    await reconcileTitles();
+  }, [orphans, reconcileTitles]);
+
+  const handleReconcileOne = useCallback(async (orphan: OrphanTab) => {
+    const action = orphan.dataRows === 0
+      ? `הטופס "${orphan.title}" ריק וימחק לגמרי.`
+      : `הטופס "${orphan.title}" מכיל ${orphan.dataRows} הגשות. הוא יועבר לארכיון (יוסתר מהדאשבורד, אבל הנתונים יישמרו בגיליון).`;
+    if (!window.confirm(`${action}\n\nלהמשיך?`)) return;
+    await reconcileTitles([orphan.title]);
+  }, [reconcileTitles]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -614,39 +643,62 @@ export default function FormsClient() {
       )}
 
       {orphans.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-amber-900">
-              נמצאו {orphans.length} טאבים בגיליון שלא קשורים לטפסים פעילים
-            </p>
-            <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
-              ככל הנראה נשארו מטפסים שנמחקו. ניתן לנקות אותם — טאבים ריקים יימחקו, טאבים עם הגשות יועברו לארכיון (יוסתרו מהדאשבורד אך יישמרו).
-            </p>
-            <ul className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-              {orphans.slice(0, 6).map((o) => (
-                <li key={o.title} className="inline-flex items-center gap-1 px-2 py-0.5 bg-white rounded-md border border-amber-200 text-amber-800">
-                  <span className="font-mono">{o.title}</span>
-                  <span className="text-amber-500">·</span>
-                  <span>{o.dataRows === 0 ? "ריק" : `${o.dataRows} הגשות`}</span>
-                </li>
-              ))}
-              {orphans.length > 6 && (
-                <li className="inline-flex items-center px-2 py-0.5 text-amber-700">+{orphans.length - 6}</li>
-              )}
-            </ul>
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-amber-900">
+                נמצאו {orphans.length} טאבים בגיליון שלא קשורים לטפסים פעילים
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                ככל הנראה נשארו מטפסים שנמחקו. ניתן לנקות כל אחד בנפרד או את כולם בבת אחת.
+                <br />
+                <span className="text-amber-600">טאב ריק יימחק לגמרי. טאב עם הגשות יוסתר מהדאשבורד אך הנתונים יישמרו בגיליון.</span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleReconcileAll}
+              disabled={reconciling}
+              className="shrink-0 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-800 text-xs font-semibold hover:bg-amber-100 disabled:opacity-50 transition-colors"
+            >
+              נקה הכל ({orphans.length})
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={handleReconcile}
-            disabled={reconciling}
-            className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-bold shadow-sm hover:bg-amber-700 disabled:opacity-50 transition-colors"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-            </svg>
-            {reconciling ? "מנקה..." : "נקה טפסים יתומים"}
-          </button>
+          <ul className="divide-y divide-amber-200/70 bg-white/60 border border-amber-200 rounded-lg overflow-hidden">
+            {orphans.map((o) => {
+              const isEmpty = o.dataRows === 0;
+              return (
+                <li key={o.title} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <div className="min-w-0 flex-1 flex items-center gap-2">
+                    <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                      isEmpty
+                        ? "bg-gray-100 text-gray-700"
+                        : "bg-amber-100 text-amber-800"
+                    }`}>
+                      {isEmpty ? "ריק" : `${o.dataRows} הגשות`}
+                    </span>
+                    <code className="font-mono text-xs sm:text-sm text-gray-800 truncate" dir="ltr" title={o.title}>{o.title}</code>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleReconcileOne(o)}
+                    disabled={reconciling}
+                    className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors disabled:opacity-50 ${
+                      isEmpty
+                        ? "bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
+                        : "bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300"
+                    }`}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    </svg>
+                    {isEmpty ? "מחק" : "ארכוב"}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 

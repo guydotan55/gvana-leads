@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { findOrphanedSubmissionTabs, reconcileOrphanedTabs } from "@/lib/forms-repo";
 
 export const dynamic = "force-dynamic";
@@ -14,10 +14,19 @@ export async function GET() {
   }
 }
 
-/** POST — actually clean up: delete empty orphans, archive non-empty ones. */
-export async function POST() {
+/**
+ * POST — actually clean up.
+ * Body (optional): { titles?: string[] }
+ *   - omitted        → cleans every orphan tab found.
+ *   - titles: ["X"]  → cleans only orphans whose title is in the list.
+ */
+export async function POST(request: NextRequest) {
   try {
-    const result = await reconcileOrphanedTabs();
+    const body = await request.json().catch(() => ({}));
+    const titles = Array.isArray(body?.titles)
+      ? body.titles.filter((t: unknown): t is string => typeof t === "string")
+      : undefined;
+    const result = await reconcileOrphanedTabs(titles);
     return NextResponse.json(result);
   } catch (error) {
     console.error("Reconcile failed:", error);
