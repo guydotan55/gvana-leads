@@ -151,17 +151,41 @@ export async function listForms(): Promise<FormDef[]> {
 }
 
 /**
- * Look up a form by its stored id (a.k.a. URL slug). Tries an exact
- * match first, then falls back to NFC-normalized comparison so a URL
- * that decodes to a slightly-different Unicode form (e.g. NFD vs NFC,
- * common with Hebrew + niqud) still resolves.
+ * Look up a form by its stored id (a.k.a. URL slug). The Vercel /
+ * Next.js edge layer occasionally hands `params.slug` to a server
+ * component still URL-percent-encoded for non-ASCII paths (e.g.
+ * "%D7%98%D7%A1%D7%98" instead of "טסט"). On top of that, Hebrew with
+ * niqud can arrive as NFD instead of the NFC we store. We try every
+ * combination so any plausible incoming form resolves.
  */
 export async function getForm(id: string): Promise<FormDef | null> {
   const all = await listForms();
-  const exact = all.find((f) => f.id === id);
-  if (exact) return exact;
-  const target = id.normalize("NFC");
-  return all.find((f) => f.id.normalize("NFC") === target) || null;
+  const variants: string[] = [];
+  const add = (s: string | undefined | null) => {
+    if (!s) return;
+    if (!variants.includes(s)) variants.push(s);
+    try {
+      const nfc = s.normalize("NFC");
+      if (!variants.includes(nfc)) variants.push(nfc);
+    } catch {
+      // ignore — environment without normalize support
+    }
+  };
+
+  add(id);
+  // The string may arrive percent-encoded; try a one-shot decode.
+  try {
+    add(decodeURIComponent(id));
+  } catch {
+    // malformed encoding — ignore and stick with the literal
+  }
+
+  for (let i = 0; i < variants.length; i += 1) {
+    const v = variants[i];
+    const hit = all.find((f) => f.id === v || f.id.normalize("NFC") === v);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 /** Public for diagnostic 404 page. */
