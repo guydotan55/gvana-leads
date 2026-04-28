@@ -43,8 +43,8 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await deleteForm(id);
-    return NextResponse.json({ success: true });
+    const result = await deleteForm(id);
+    return NextResponse.json({ success: true, ...result });
   } catch (error) {
     console.error("Delete form failed:", error);
     return NextResponse.json({ error: "Failed to delete form" }, { status: 500 });
