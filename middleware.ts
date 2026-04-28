@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySession, SESSION_COOKIE } from "@/lib/auth";
 
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webhooks", "/api/organic-lead", "/api/track", "/form"];
+// TEMP: /api/leads is public on this debug branch only — reverted before merge.
+const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webhooks", "/api/organic-lead", "/api/track", "/form", "/api/leads"];
 
 // Public submission endpoint for builder-created forms. CRUD endpoints
 // under /api/forms/[id] stay admin-only.
