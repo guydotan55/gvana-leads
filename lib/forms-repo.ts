@@ -150,13 +150,32 @@ export async function listForms(): Promise<FormDef[]> {
   return forms;
 }
 
+/**
+ * Look up a form by its stored id (a.k.a. URL slug). Tries an exact
+ * match first, then falls back to NFC-normalized comparison so a URL
+ * that decodes to a slightly-different Unicode form (e.g. NFD vs NFC,
+ * common with Hebrew + niqud) still resolves.
+ */
 export async function getForm(id: string): Promise<FormDef | null> {
   const all = await listForms();
-  return all.find((f) => f.id === id) || null;
+  const exact = all.find((f) => f.id === id);
+  if (exact) return exact;
+  const target = id.normalize("NFC");
+  return all.find((f) => f.id.normalize("NFC") === target) || null;
+}
+
+/** Public for diagnostic 404 page. */
+export async function listFormSlugs(): Promise<{ id: string; title: string; status: FormDef["status"] }[]> {
+  const all = await listForms();
+  return all.map((f) => ({ id: f.id, title: f.title, status: f.status }));
 }
 
 function slugify(input: string): string {
+  // Normalize first so the same visual title always maps to the same slug,
+  // regardless of NFC/NFD source (browsers and OS keyboards can produce
+  // either when typing Hebrew with niqud).
   return input
+    .normalize("NFC")
     .trim()
     .toLowerCase()
     .replace(/[\s_]+/g, "-")
