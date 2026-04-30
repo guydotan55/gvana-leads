@@ -29,19 +29,46 @@ export default function DashboardClient() {
   const skipNextPoll = useRef(false);
 
   const fetchLeads = useCallback(async () => {
+    // Polling-skip flag: an optimistic-update handler set this so the
+    // very next poll doesn't clobber the in-flight optimistic state.
+    // We must still clear `loading` so the page never gets stuck on
+    // the loading screen if this branch happens to fire on first mount.
     if (skipNextPoll.current) {
       skipNextPoll.current = false;
+      setLoading(false);
       return;
     }
+    // Hard timeout — if /api/leads ever hangs (Sheets API stalled,
+    // edge cold-start, network mid-loss), abort after 25s instead of
+    // leaving the user staring at "טוען..." forever.
+    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 25_000) : null;
     try {
-      const res = await fetch("/api/leads");
-      if (!res.ok) throw new Error("Failed to fetch");
+      const res = await fetch("/api/leads", {
+        credentials: "same-origin",
+        redirect: "manual",
+        headers: { Accept: "application/json" },
+        signal: ctrl?.signal,
+      });
+      if (res.type === "opaqueredirect" || res.status === 0 || (res.status >= 300 && res.status < 400)) {
+        // Auth redirect — session expired between page load and fetch.
+        // Surface that explicitly so the user can re-login instead of
+        // staring at a hung loader.
+        throw new Error("ההפעלה פגה — רענן את הדף או התחבר שוב");
+      }
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status}${body ? `: ${body.slice(0, 120)}` : ""}`);
+      }
       const data = await res.json();
       setLeads(data.leads);
       setError("");
-    } catch {
-      setError(t("common.error"));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t("common.error");
+      console.error("fetchLeads failed:", err);
+      setError(`${t("common.error")} — ${msg}`);
     } finally {
+      if (timer) clearTimeout(timer);
       setLoading(false);
     }
   }, []);
