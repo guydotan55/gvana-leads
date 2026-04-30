@@ -41,6 +41,14 @@ export async function GET() {
     const lastByForm: Record<string, number> = {};
 
     for (const lead of leads) {
+      // Only count leads that actually came through the public form
+      // pages. Facebook Lead Ads webhooks (lead.leadId is a raw FB id
+      // after stripping the `l:` prefix) are NOT form submissions —
+      // including them would inflate the 'הגשות' count and make the
+      // conversion rate meaningless (e.g. 31 subs / 1 visit = 3100%).
+      // Organic-form leads keep the `org:` prefix on their id.
+      if (!lead.leadId?.startsWith("org:")) continue;
+
       let slug: string;
       // Builder forms own a dedicated tab — that's the tightest signal.
       if (builderBySheetTab[lead.sheetTab]) {
