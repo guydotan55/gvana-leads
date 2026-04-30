@@ -23,7 +23,21 @@ export default async function PublicDynamicFormPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const form = await getForm(slug);
+
+  // Resolve the form. If anything throws (Sheets API hiccup, malformed
+  // row, etc.) we catch it and surface a friendly Hebrew page instead
+  // of letting Next.js's generic "Application error" leak through.
+  let form: Awaited<ReturnType<typeof getForm>> = null;
+  let resolveError: { message: string; stack?: string } | null = null;
+  try {
+    form = await getForm(slug);
+  } catch (err) {
+    resolveError = {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    };
+    console.error("getForm threw for slug=%s:", slug, err);
+  }
 
   if (form && form.status === "published") {
     return (
@@ -41,7 +55,9 @@ export default async function PublicDynamicFormPage({
   const matchById = known.find((f) => f.id === slug);
 
   let reason: string;
-  if (form && form.status !== "published") {
+  if (resolveError) {
+    reason = "אירעה שגיאה בטעינת הטופס. הצוות הטכני יוכל לראות פרטים נוספים בדיבאג למטה.";
+  } else if (form && form.status !== "published") {
     reason = "הטופס נמצא אבל סטטוס שלו עדיין 'טיוטה' — ערוך את הטופס בלוח הבקרה ולחץ 'פרסם טופס'.";
   } else if (matchById) {
     reason = "הטופס קיים אך מצב הפרסום לא תקין.";
@@ -77,9 +93,20 @@ export default async function PublicDynamicFormPage({
         <p style={{ color: "#6b7280", margin: "0 0 20px", lineHeight: 1.6 }}>{reason}</p>
 
         {isAdmin && (
-          <details style={{ marginTop: 16, fontSize: 13, color: "#6b7280" }}>
+          <details style={{ marginTop: 16, fontSize: 13, color: "#6b7280" }} open={!!resolveError}>
             <summary style={{ cursor: "pointer", fontWeight: 600 }}>פרטי דיבאג (מנהל בלבד)</summary>
             <div style={{ marginTop: 8, padding: 12, background: "#f9fafb", borderRadius: 8, fontFamily: "ui-monospace, monospace", fontSize: 12 }}>
+              {resolveError && (
+                <div style={{ marginBottom: 12, padding: 10, background: "#fef2f2", border: "1px solid #fee2e2", borderRadius: 6, color: "#b91c1c" }}>
+                  <p style={{ fontWeight: 700, margin: "0 0 4px" }}>getForm threw:</p>
+                  <p style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }} dir="ltr">{resolveError.message}</p>
+                  {resolveError.stack && (
+                    <pre style={{ marginTop: 6, marginBottom: 0, fontSize: 11, opacity: 0.8, whiteSpace: "pre-wrap", wordBreak: "break-word" }} dir="ltr">
+                      {resolveError.stack.split("\n").slice(0, 8).join("\n")}
+                    </pre>
+                  )}
+                </div>
+              )}
               <p>requested slug: <code dir="ltr">{slug}</code></p>
               <p>bytes (hex): <code dir="ltr">{slugBytes}</code></p>
               {known.length > 0 && (
