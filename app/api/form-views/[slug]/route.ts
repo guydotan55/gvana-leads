@@ -3,6 +3,20 @@ import { appendView } from "@/lib/views-repo";
 
 export const dynamic = "force-dynamic";
 
+const VISITOR_COOKIE = "gvana_vid";
+const VISITOR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
+
+function generateVisitorId(): string {
+  // Server-side UUID v4 — uses crypto.randomUUID when available, falls
+  // back to a timestamp+random for older runtimes.
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  const t = Date.now().toString(36);
+  const r = Math.random().toString(36).slice(2, 14);
+  return `${t}-${r}`;
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
@@ -12,8 +26,6 @@ export async function POST(
     if (!rawSlug?.trim()) {
       return NextResponse.json({ error: "Missing slug" }, { status: 400 });
     }
-    // Same defensive decoding as getForm — the Vercel edge sometimes
-    // hands non-ASCII paths through still percent-encoded.
     let slug = rawSlug;
     try {
       slug = decodeURIComponent(rawSlug);
@@ -22,10 +34,17 @@ export async function POST(
     }
     slug = slug.normalize("NFC");
 
+    // Resolve a stable visitor id. Read the cookie if present;
+    // otherwise mint one and set it on the response. Either way we
+    // record THIS view against the resolved id so the very first
+    // visit and subsequent ones from the same browser dedupe.
+    const existingVid = request.cookies.get(VISITOR_COOKIE)?.value?.trim();
+    const visitorId = existingVid && existingVid.length > 0 ? existingVid : generateVisitorId();
+    const isNewVisitor = visitorId !== existingVid;
+
     const body = await request.json().catch(() => ({}));
     const source = body?.source === "builder" ? "builder" : "hardcoded";
 
-    // Best-effort: never block the form UX on tracking failures.
     appendView({
       slug,
       source,
@@ -33,12 +52,22 @@ export async function POST(
       utmMedium: typeof body?.utmMedium === "string" ? body.utmMedium : undefined,
       utmCampaign: typeof body?.utmCampaign === "string" ? body.utmCampaign : undefined,
       referer: request.headers.get("referer") || undefined,
+      visitorId,
     }).catch((err) => console.error("appendView failed:", err));
 
-    return NextResponse.json({ ok: true });
+    const res = NextResponse.json({ ok: true });
+    if (isNewVisitor) {
+      res.cookies.set(VISITOR_COOKIE, visitorId, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: true,
+        path: "/",
+        maxAge: VISITOR_COOKIE_MAX_AGE,
+      });
+    }
+    return res;
   } catch (error) {
     console.error("form-view tracking failed:", error);
-    // Always 200 so the client never retries — tracking is best-effort.
     return NextResponse.json({ ok: false });
   }
 }

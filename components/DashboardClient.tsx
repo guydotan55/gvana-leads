@@ -52,6 +52,16 @@ export default function DashboardClient() {
     return () => clearInterval(interval);
   }, [fetchLeads]);
 
+  // On mount (incl. after login redirect / direct nav), make sure the
+  // user lands at the top of the dashboard. Mobile browsers and
+  // Next.js's scroll restoration occasionally preserve the prior
+  // scroll position, which is jarring when the leads table loads in
+  // and shifts the page.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
+
   async function handleStatusChange(lead: Lead, newStatus: string, attempts?: number, plan?: string) {
     const prevLeads = leads;
     setLeads((prev) =>
