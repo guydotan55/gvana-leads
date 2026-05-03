@@ -14,3 +14,13 @@ body {
   background: var(--brand-background);
   color: #1a1a1a;
 }
+
+/* Disable CSS scroll-anchoring globally. The leads table loads
+   asynchronously and grows after first paint; without this, the
+   browser pins the user to whatever was in view, leaving them
+   mid-page on every dashboard entry. Combined with the inline
+   beforeInteractive script + ScrollAnchor component, this guarantees
+   the dashboard always starts at the top. */
+html {
+  overflow-anchor: none;
+}

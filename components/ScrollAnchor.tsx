@@ -3,27 +3,28 @@
 import { useEffect } from "react";
 
 /**
- * Aggressively force the page to start at the top.
+ * Force the page to start at the top, robustly.
  *
- * Why one mount-effect isn't enough:
- *  - Mobile Safari (and Chrome on iOS) use bfcache: when the user
- *    navigates back/forward, the page is restored from cache with
- *    its prior scroll position. React's mount effect doesn't fire
- *    because the component was never unmounted.
- *  - Next.js App Router has its own scroll restoration that runs
- *    AFTER our mount effect, so a scrollTo inside useEffect can be
- *    overridden a tick later.
- *  - Long pages render their tail content asynchronously (e.g. the
- *    leads table fills in after a fetch). Browsers can keep the
- *    scroll position constant relative to the bottom of the page,
- *    leaving the user mid-scroll.
+ * Why a single useEffect scrollTo isn't enough:
+ *  - Browser CSS scroll-anchoring can pin the user to an element
+ *    when content reflows (the leads table fills in 200ms after
+ *    first paint, and the browser tries to "preserve their place").
+ *  - Browser scroll restoration restores prior scroll on refresh /
+ *    back-nav. Setting `scrollRestoration = "manual"` inside a React
+ *    effect runs AFTER the browser already restored.
+ *  - Mobile Safari's bfcache restores both DOM and scroll without
+ *    re-running mount effects.
  *
- * This component:
- *  - Disables `history.scrollRestoration` so the browser stops
- *    restoring scroll on its own.
- *  - Scrolls to top on mount.
- *  - Re-scrolls to top on the `pageshow` event (fires on bfcache
- *    restore as well as initial load).
+ * Defense:
+ *  - The dashboard layout sets `scrollRestoration = "manual"` and
+ *    `scrollTo(0,0)` from an inline `beforeInteractive` script — that
+ *    handles the initial paint case before React even hydrates.
+ *  - This component takes over after hydration: scroll once on mount,
+ *    once on the next animation frame, then a few times over the
+ *    next second to outlast layout reflow when the leads table
+ *    renders. Stops after 1.2s so we don't fight a deliberate user
+ *    scroll.
+ *  - `pageshow` listener handles bfcache restore.
  */
 export default function ScrollAnchor() {
   useEffect(() => {
@@ -37,20 +38,31 @@ export default function ScrollAnchor() {
       // some embedded contexts disallow this; ignore
     }
 
-    const goTop = () => window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    const goTop = () => window.scrollTo(0, 0);
 
-    // Initial mount.
+    // Mount + next paint.
     goTop();
-    // After paint — covers the case where the layout grows after
-    // first render and the browser silently re-anchors.
-    requestAnimationFrame(goTop);
+    const raf = requestAnimationFrame(goTop);
 
-    // bfcache restore on mobile.
+    // Brute-force across the first ~1s. Covers the case where the
+    // leads-table fetch resolves AFTER mount and shifts layout, and
+    // the browser's scroll-anchoring tries to keep the user "in place".
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (const ms of [50, 150, 350, 700, 1200]) {
+      timers.push(setTimeout(goTop, ms));
+    }
+
+    // bfcache restore on mobile back-nav.
     const onPageShow = (e: PageTransitionEvent) => {
       if (e.persisted) goTop();
     };
     window.addEventListener("pageshow", onPageShow);
-    return () => window.removeEventListener("pageshow", onPageShow);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      timers.forEach(clearTimeout);
+      window.removeEventListener("pageshow", onPageShow);
+    };
   }, []);
 
   return null;
