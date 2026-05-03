@@ -193,7 +193,24 @@ function buildFixedColumnMap(): Record<string, number> {
 
 /* ---------- Public API ---------- */
 
+// Short-lived cache for getLeads(). Without this every /api/leads
+// poll AND every /api/form-stats request re-reads every tab from
+// scratch, blowing through the 60-reads/min/user quota when an admin
+// is on the dashboard alongside /forms. 15s TTL is short enough that
+// fresh leads still appear within one extra poll.
+const LEADS_CACHE_TTL_MS = 15_000;
+let leadsCache: { value: Lead[]; expires: number } | null = null;
+
+/** Force the next getLeads() call to re-read from Sheets. Called by
+ *  /api/leads/[row] PATCH/DELETE so admin actions show up immediately. */
+export function invalidateLeadsCache(): void {
+  leadsCache = null;
+}
+
 export async function getLeads(): Promise<Lead[]> {
+  if (leadsCache && leadsCache.expires > Date.now()) {
+    return leadsCache.value;
+  }
   const sheets = getSheets();
   const spreadsheetId = getSheetId();
   const defaultSheetName = columnsConfig.sheetName; // "לידים"
@@ -256,6 +273,7 @@ export async function getLeads(): Promise<Lead[]> {
     return b.createdTime.localeCompare(a.createdTime);
   });
 
+  leadsCache = { value: allLeads, expires: Date.now() + LEADS_CACHE_TTL_MS };
   return allLeads;
 }
 

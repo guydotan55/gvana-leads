@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getLeads, updateLeadCells, deleteLead, VALID_STATUSES } from "@/lib/sheets";
+import { getLeads, updateLeadCells, deleteLead, invalidateLeadsCache, VALID_STATUSES } from "@/lib/sheets";
 import { sendCAPIEvent } from "@/lib/capi";
 
 export async function PATCH(
@@ -48,6 +48,7 @@ export async function PATCH(
     }
 
     await updateLeadCells(lead.sheetTab, rowNum, updates);
+    invalidateLeadsCache();
 
     // Fire CAPI events on meaningful status changes
     if ((status === "relevant" || status === "not_relevant_target") && lead.phone) {
@@ -111,6 +112,7 @@ export async function DELETE(
     }
 
     await deleteLead(lead.sheetTab, rowNum);
+    invalidateLeadsCache();
 
     return NextResponse.json({ success: true });
   } catch (error) {
