@@ -10,6 +10,7 @@
 import { google, sheets_v4 } from "googleapis";
 import type { FormDef, FormField } from "@/config/forms";
 import { RESERVED_SLUGS } from "@/config/forms";
+import { withSheetsRetry } from "@/lib/sheets-retry";
 
 const META_TAB = "_forms_meta";
 
@@ -133,20 +134,40 @@ function formDefToRow(def: FormDef): string[] {
   ];
 }
 
+// Module-level cache for the form catalog. `_forms_meta` rarely
+// changes (only on form publish/edit/delete), so caching for ~30s
+// dramatically cuts Sheets API reads under traffic — every public
+// form-page visit was causing a fresh listForms() call, blowing the
+// 60-reads/min quota during ad bursts.
+let listFormsCache: { value: FormDef[]; expires: number } | null = null;
+const LIST_FORMS_TTL_MS = 30_000;
+
+/** Invalidate the cached form catalog (call after create/update/delete). */
+function invalidateListFormsCache(): void {
+  listFormsCache = null;
+}
+
 export async function listForms(): Promise<FormDef[]> {
+  if (listFormsCache && listFormsCache.expires > Date.now()) {
+    return listFormsCache.value;
+  }
   const sheets = getSheets();
   const spreadsheetId = getSheetId();
-  await ensureTab(sheets, spreadsheetId, META_TAB, META_HEADERS);
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `'${META_TAB}'!A2:H`,
+  const forms = await withSheetsRetry(async () => {
+    await ensureTab(sheets, spreadsheetId, META_TAB, META_HEADERS);
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${META_TAB}'!A2:H`,
+    });
+    const rows = (res.data.values as string[][] | undefined) || [];
+    const out: FormDef[] = [];
+    for (const row of rows) {
+      const def = rowToFormDef(row);
+      if (def) out.push(def);
+    }
+    return out;
   });
-  const rows = (res.data.values as string[][] | undefined) || [];
-  const forms: FormDef[] = [];
-  for (const row of rows) {
-    const def = rowToFormDef(row);
-    if (def) forms.push(def);
-  }
+  listFormsCache = { value: forms, expires: Date.now() + LIST_FORMS_TTL_MS };
   return forms;
 }
 
@@ -376,6 +397,7 @@ export async function createForm(input: CreateFormInput): Promise<FormDef> {
     requestBody: { values: [formDefToRow(def)] },
   });
 
+  invalidateListFormsCache();
   return def;
 }
 
@@ -446,6 +468,7 @@ export async function updateForm(id: string, input: UpdateFormInput): Promise<Fo
     requestBody: { values: [formDefToRow(updated)] },
   });
 
+  invalidateListFormsCache();
   return updated;
 }
 
@@ -465,6 +488,9 @@ export async function updateForm(id: string, input: UpdateFormInput): Promise<Fo
 export async function deleteForm(id: string): Promise<{ tabAction: "deleted" | "archived" | "kept"; archivedTab?: string }> {
   const sheets = getSheets();
   const spreadsheetId = getSheetId();
+
+  // Form catalog is about to change.
+  invalidateListFormsCache();
 
   const found = await findRowByFormId(sheets, spreadsheetId, id);
   if (!found) return { tabAction: "kept" };
