@@ -3,29 +3,27 @@
 import { useEffect } from "react";
 
 /**
- * Force the page to start at the top, robustly.
+ * Scroll-to-top watchdog.
  *
- * Why a single useEffect scrollTo isn't enough:
- *  - Browser CSS scroll-anchoring can pin the user to an element
- *    when content reflows (the leads table fills in 200ms after
- *    first paint, and the browser tries to "preserve their place").
- *  - Browser scroll restoration restores prior scroll on refresh /
- *    back-nav. Setting `scrollRestoration = "manual"` inside a React
- *    effect runs AFTER the browser already restored.
- *  - Mobile Safari's bfcache restores both DOM and scroll without
- *    re-running mount effects.
+ * The dashboard kept landing the user mid-table on entry, even after
+ * we disabled CSS scroll-anchoring, set scrollRestoration to manual
+ * via a beforeInteractive script, and removed an offending autoFocus
+ * on inline-edit inputs. Something else still scrolls — most likely
+ * a browser focus-restore for a previously-focused form field, or
+ * some interaction we can't identify by static analysis.
  *
- * Defense:
- *  - The dashboard layout sets `scrollRestoration = "manual"` and
- *    `scrollTo(0,0)` from an inline `beforeInteractive` script — that
- *    handles the initial paint case before React even hydrates.
- *  - This component takes over after hydration: scroll once on mount,
- *    once on the next animation frame, then a few times over the
- *    next second to outlast layout reflow when the leads table
- *    renders. Stops after 1.2s so we don't fight a deliberate user
- *    scroll.
- *  - `pageshow` listener handles bfcache restore.
+ * This component is the nuclear option: for the first 2 seconds
+ * after mount, it watches scroll position and snaps it back to 0
+ * UNLESS the user has shown intent to scroll (wheel / touchstart /
+ * keydown / mousedown). After 2s it disengages and the page behaves
+ * normally.
+ *
+ * Trade-off: if a user scrolls within the first 2s of page load we
+ * still ignore it. But humans don't usually scroll in that window;
+ * they're reading what just rendered.
  */
+const WATCHDOG_DURATION_MS = 2000;
+
 export default function ScrollAnchor() {
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -35,32 +33,64 @@ export default function ScrollAnchor() {
         window.history.scrollRestoration = "manual";
       }
     } catch {
-      // some embedded contexts disallow this; ignore
+      // ignore
     }
 
-    const goTop = () => window.scrollTo(0, 0);
+    let userIntent = false;
+    let active = true;
 
-    // Mount + next paint.
+    const goTop = () => {
+      if (!active || userIntent) return;
+      if (window.scrollY !== 0 || window.pageYOffset !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+
+    const markUser = () => {
+      userIntent = true;
+    };
+
+    const intentEvents: (keyof WindowEventMap)[] = [
+      "wheel",
+      "touchstart",
+      "keydown",
+      "mousedown",
+    ];
+    intentEvents.forEach((evt) => {
+      window.addEventListener(evt, markUser, { passive: true } as AddEventListenerOptions);
+    });
+
+    // Snap back on every scroll AND on a micro-tick. The tick catches
+    // programmatic scrolls (focus restore, etc.) that don't fire all
+    // the events we listen to.
+    const onScroll = () => goTop();
+    window.addEventListener("scroll", onScroll, { passive: true });
+
     goTop();
-    const raf = requestAnimationFrame(goTop);
+    requestAnimationFrame(goTop);
+    const tick = setInterval(goTop, 50);
 
-    // Brute-force across the first ~1s. Covers the case where the
-    // leads-table fetch resolves AFTER mount and shifts layout, and
-    // the browser's scroll-anchoring tries to keep the user "in place".
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    for (const ms of [50, 150, 350, 700, 1200]) {
-      timers.push(setTimeout(goTop, ms));
-    }
+    const disengage = setTimeout(() => {
+      active = false;
+      clearInterval(tick);
+      window.removeEventListener("scroll", onScroll);
+    }, WATCHDOG_DURATION_MS);
 
-    // bfcache restore on mobile back-nav.
     const onPageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) goTop();
+      if (e.persisted) {
+        userIntent = false;
+        active = true;
+        goTop();
+      }
     };
     window.addEventListener("pageshow", onPageShow);
 
     return () => {
-      cancelAnimationFrame(raf);
-      timers.forEach(clearTimeout);
+      active = false;
+      clearInterval(tick);
+      clearTimeout(disengage);
+      intentEvents.forEach((evt) => window.removeEventListener(evt, markUser));
+      window.removeEventListener("scroll", onScroll);
       window.removeEventListener("pageshow", onPageShow);
     };
   }, []);
