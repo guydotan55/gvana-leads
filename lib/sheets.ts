@@ -1,5 +1,6 @@
 import { google, sheets_v4 } from "googleapis";
 import columnsConfig from "@/config/columns.json";
+import { withSheetsRetry } from "@/lib/sheets-retry";
 
 export const VALID_STATUSES = ["new", "relevant", "not_relevant", "not_relevant_target", "unavailable", "under_review", "accepted", "rejected"];
 
@@ -198,7 +199,7 @@ export async function getLeads(): Promise<Lead[]> {
   const defaultSheetName = columnsConfig.sheetName; // "לידים"
 
   // Get all tab names
-  const meta = await sheets.spreadsheets.get({ spreadsheetId });
+  const meta = await withSheetsRetry(() => sheets.spreadsheets.get({ spreadsheetId }));
   const tabNames = (
     meta.data.sheets?.map((s) => s.properties?.title).filter(Boolean) as string[]
   ) || [];
@@ -210,10 +211,12 @@ export async function getLeads(): Promise<Lead[]> {
     // contain leads.
     if (tabName.startsWith("_")) continue;
 
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `'${tabName}'!A1:Z`,
-    });
+    const response = await withSheetsRetry(() =>
+      sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${tabName}'!A1:Z`,
+      })
+    );
 
     const rows = response.data.values || [];
     if (rows.length === 0) continue;
