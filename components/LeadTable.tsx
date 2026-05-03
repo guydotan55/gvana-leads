@@ -166,12 +166,30 @@ function HandledBySelect({
   const [isOther, setIsOther] = useState(
     lead.handledBy !== "" && !HANDLED_BY_OPTIONS.includes(lead.handledBy)
   );
+  // Only focus the input when the user JUST clicked "Other" — never on
+  // the initial render. Previously, pre-existing custom values caused
+  // autoFocus to fire on every dashboard load, and the browser scrolls
+  // focused elements into view → user lands mid-table instead of at
+  // the top of the page.
+  const [justToggled, setJustToggled] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (justToggled && inputRef.current) {
+      // preventScroll so even if this fires during a layout shift,
+      // the browser doesn't auto-scroll the input into view.
+      inputRef.current.focus({ preventScroll: true });
+      setJustToggled(false);
+    }
+  }, [justToggled]);
 
   function handleSelect(value: string) {
     if (value === "__other__") {
       setIsOther(true);
+      setJustToggled(true);
     } else {
       setIsOther(false);
+      setJustToggled(false);
       onChange(lead, value);
     }
   }
@@ -180,6 +198,7 @@ function HandledBySelect({
     return (
       <div className="flex items-center gap-1">
         <input
+          ref={inputRef}
           type="text"
           defaultValue={HANDLED_BY_OPTIONS.includes(lead.handledBy) ? "" : lead.handledBy}
           onBlur={(e) => {
@@ -194,7 +213,6 @@ function HandledBySelect({
           onKeyDown={(e) => {
             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
           }}
-          autoFocus
           className="px-2 py-1.5 rounded text-xs border border-gray-300 bg-white text-gray-700 w-20 focus:outline-none focus:ring-2 focus:ring-brand-sky/30"
           placeholder={t("leads.handledBy.other")}
         />
@@ -467,7 +485,7 @@ function CommentEditor({
     requestAnimationFrame(() => {
       const el = textareaRef.current;
       if (el) {
-        el.focus();
+        el.focus({ preventScroll: true });
         const len = el.value.length;
         el.setSelectionRange(len, len);
       }
