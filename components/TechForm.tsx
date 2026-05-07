@@ -7,6 +7,7 @@ import Image from "next/image";
 import { useFormView } from "@/lib/use-form-view";
 
 const FB_PIXEL_ID = "775454794700271";
+const FB_PIXEL_ID_B = "614577575641928";
 
 declare global {
   interface Window {
@@ -162,17 +163,26 @@ export default function TechForm() {
             s.parentNode.insertBefore(t,s)}(window, document,'script',
             'https://connect.facebook.net/en_US/fbevents.js');
             fbq('init', '${FB_PIXEL_ID}');
+            fbq('init', '${FB_PIXEL_ID_B}');
             fbq('track', 'PageView');
           `,
         }}
       />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <noscript>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           height="1"
           width="1"
           style={{ display: "none" }}
           src={`https://www.facebook.com/tr?id=${FB_PIXEL_ID}&ev=PageView&noscript=1`}
+          alt=""
+        />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          height="1"
+          width="1"
+          style={{ display: "none" }}
+          src={`https://www.facebook.com/tr?id=${FB_PIXEL_ID_B}&ev=PageView&noscript=1`}
           alt=""
         />
       </noscript>
