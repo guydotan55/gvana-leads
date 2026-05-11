@@ -71,8 +71,8 @@ export const clientConfig: ClientConfig = {
     webhookFbLeads: true,
   },
   integrations: {
-    whatsapp: { provider: "infobip" },
-    infobip: { enabled: true },
+    whatsapp: { provider: "wasender", dailyCap: 60, batchSize: 8 },
+    infobip: { enabled: false },
     capi: { enabled: true },
     sheets: { enabled: true },
   },

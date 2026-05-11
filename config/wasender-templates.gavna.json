@@ -1,0 +1,24 @@
+{
+  "_README": "REPLACE these placeholder templates with Gvana's real Hebrew copy before merging to production. Each key is a templateName that the dashboard/triggers reference. {{1}}, {{2}}, ... are positional placeholders filled by the placeholders array on send.",
+
+  "welcome": {
+    "language": "he",
+    "category": "LOCAL",
+    "body": "[REPLACE BEFORE MERGE] שלום {{1}}, תודה שפנית למכינת גוונא. נחזור אליך בהקדם.",
+    "buttons": []
+  },
+
+  "first_contact": {
+    "language": "he",
+    "category": "LOCAL",
+    "body": "[REPLACE BEFORE MERGE] שלום {{1}}, פנית אלינו דרך {{2}}. מתי נוח לך לדבר?",
+    "buttons": []
+  },
+
+  "interview_invite": {
+    "language": "he",
+    "category": "LOCAL",
+    "body": "[REPLACE BEFORE MERGE] {{1}}, נשמח להזמין אותך לראיון ב-{{2}}. מאשרים?",
+    "buttons": []
+  }
+}
