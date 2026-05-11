@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { t } from "@/lib/i18n";
 import { clientConfig } from "@/client.config";
 import MessagePreview from "./MessagePreview";
-import type { WhatsAppTemplate } from "@/lib/infobip";
+import type { WhatsAppTemplate } from "@/lib/whatsapp";
 import columnsConfig from "@/config/columns.json";
 
 interface TemplateMappings {

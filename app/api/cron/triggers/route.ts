@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { findPendingTriggers } from "@/lib/triggers";
-import { sendTemplateMessage } from "@/lib/infobip";
+import { getWhatsAppProvider } from "@/lib/whatsapp";
 import { updateLeadCells } from "@/lib/sheets";
 import { sendCAPIEvent } from "@/lib/capi";
 import { isFeatureEnabled } from "@/lib/config";
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
           placeholders.push(String(value));
         }
 
-        const sendResult = await sendTemplateMessage({
+        const sendResult = await getWhatsAppProvider().sendTemplateMessage({
           to: lead.phone,
           templateName: trigger.template,
           language: mapping.language || "he",

@@ -1,17 +1,22 @@
-import { normalizePhone } from "./phone";
+import type {
+  WhatsAppProvider,
+  SendTemplateParams,
+  SendTemplateResult,
+  WhatsAppTemplate,
+} from "@/lib/whatsapp/types";
+import { WhatsAppSendError } from "@/lib/whatsapp/types";
+import { normalizePhone } from "@/lib/phone";
 
-interface InfobipConfig {
-  apiKey: string;
-  baseUrl: string;
-  sender: string;
-}
-
-function getConfig(): InfobipConfig {
+function getConfig() {
   const apiKey = process.env.INFOBIP_API_KEY;
   const baseUrl = process.env.INFOBIP_BASE_URL;
   const sender = process.env.INFOBIP_SENDER;
   if (!apiKey || !baseUrl || !sender) {
-    throw new Error("Infobip env vars (INFOBIP_API_KEY, INFOBIP_BASE_URL, INFOBIP_SENDER) are required");
+    throw new WhatsAppSendError(
+      "infobip",
+      "config",
+      "Missing INFOBIP_API_KEY / INFOBIP_BASE_URL / INFOBIP_SENDER",
+    );
   }
   return { apiKey, baseUrl, sender };
 }
@@ -28,50 +33,40 @@ async function infobipFetch(path: string, options: RequestInit = {}) {
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Infobip API error ${res.status}: ${body}`);
+    let kind: WhatsAppSendError["kind"];
+    if (res.status === 401 || res.status === 403) {
+      kind = "auth";
+    } else if (res.status === 429) {
+      kind = "rate_limit";
+    } else if (res.status >= 400 && res.status < 500) {
+      kind = "bad_request";
+    } else {
+      kind = "upstream";
+    }
+    throw new WhatsAppSendError(
+      "infobip",
+      kind,
+      `Infobip API error ${res.status}: ${body}`,
+      res.status,
+      body,
+    );
   }
   return res.json();
 }
 
-export interface WhatsAppTemplate {
-  name: string;
-  language: string;
-  status: string;
-  category: string;
-  structure: {
-    header?: { format: string };
-    body: { text: string; examples?: string[] };
-    footer?: { text: string };
-    buttons?: Array<{ type: string; text: string }>;
-  };
-}
-
-export async function getTemplates(): Promise<WhatsAppTemplate[]> {
+async function getTemplates(): Promise<WhatsAppTemplate[]> {
   const config = getConfig();
   const data = await infobipFetch(
-    `/whatsapp/2/senders/${config.sender}/templates`
+    `/whatsapp/2/senders/${config.sender}/templates`,
   );
   return (data.templates || []).filter(
-    (t: WhatsAppTemplate) => t.status === "APPROVED"
+    (t: WhatsAppTemplate) => t.status === "APPROVED",
   );
 }
 
-export interface SendMessageParams {
-  to: string;
-  templateName: string;
-  language: string;
-  placeholders: string[];
-  sender?: string;
-}
-
-export interface SendMessageResult {
-  messageId: string;
-  status: string;
-}
-
-export async function sendTemplateMessage(
-  params: SendMessageParams
-): Promise<SendMessageResult> {
+async function sendTemplateMessage(
+  params: SendTemplateParams,
+): Promise<SendTemplateResult> {
   const config = getConfig();
   const to = normalizePhone(params.to);
 
@@ -104,3 +99,9 @@ export async function sendTemplateMessage(
     status: message?.status?.name || "UNKNOWN",
   };
 }
+
+export const infobipProvider: WhatsAppProvider = {
+  name: "infobip",
+  sendTemplateMessage,
+  getTemplates,
+};

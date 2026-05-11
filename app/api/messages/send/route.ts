@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendTemplateMessage } from "@/lib/infobip";
+import { getWhatsAppProvider } from "@/lib/whatsapp";
 import { getLeads, updateLeadCells } from "@/lib/sheets";
 import { sendCAPIEvent } from "@/lib/capi";
 import { readFile } from "fs/promises";
@@ -43,7 +43,8 @@ export async function POST(request: NextRequest) {
       placeholders.push(String(value));
     }
 
-    const result = await sendTemplateMessage({
+    const wa = getWhatsAppProvider();
+    const result = await wa.sendTemplateMessage({
       to: lead.phone,
       templateName,
       language: language || mapping.language || "he",

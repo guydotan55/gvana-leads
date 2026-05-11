@@ -1,14 +1,8 @@
 import { clientConfig } from "@/client.config";
+import { infobipProvider } from "./providers/infobip";
 import type { WhatsAppProvider } from "./types";
 
 export * from "./types";
-
-// Stubs only — real implementations land in later tasks.
-const infobipProvider: WhatsAppProvider = {
-  name: "infobip",
-  async sendTemplateMessage() { throw new Error("infobip provider not yet implemented"); },
-  async getTemplates() { throw new Error("infobip provider not yet implemented"); },
-};
 
 const wasenderProvider: WhatsAppProvider = {
   name: "wasender",
