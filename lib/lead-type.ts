@@ -61,3 +61,16 @@ export function getCoreLeadType(lead: Lead): CoreLeadType {
   const { kind } = classifyLead(lead);
   return kind === "custom" ? "student" : kind;
 }
+
+/**
+ * Stable discriminator used by the dashboard type filter. Core kinds map
+ * to their kind ("student" / "tech" / ...); builder-created forms get a
+ * `custom:<sheetTab>` key so each custom form is its own filter bucket.
+ */
+export function getLeadFilterKey(lead: Lead): string {
+  const info = classifyLead(lead);
+  if (info.kind === "custom") {
+    return `custom:${lead.sheetTab || info.label}`;
+  }
+  return info.kind;
+}

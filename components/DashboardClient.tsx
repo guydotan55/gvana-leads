@@ -5,7 +5,7 @@ import StatsBar from "./StatsBar";
 import LeadTable from "./LeadTable";
 import { t } from "@/lib/i18n";
 import type { Lead } from "@/lib/sheets";
-import { getCoreLeadType } from "@/lib/lead-type";
+import { classifyLead, getLeadFilterKey } from "@/lib/lead-type";
 
 const POLL_INTERVAL = 30_000;
 
@@ -203,11 +203,33 @@ export default function DashboardClient() {
 
   const filteredLeads = useMemo(() => {
     return leads.filter((l) => {
-      if (typeFilter && getCoreLeadType(l) !== typeFilter) return false;
+      if (typeFilter && getLeadFilterKey(l) !== typeFilter) return false;
       if (sourceFilter && getLeadSource(l) !== sourceFilter) return false;
       return true;
     });
   }, [leads, typeFilter, sourceFilter]);
+
+  // Type-filter options: 4 core kinds are always present (consistent UI even
+  // before any leads load), plus one entry per builder-created form that
+  // currently has leads in the dataset.
+  const typeFilterOptions = useMemo(() => {
+    const opts: { key: string; label: string }[] = [
+      { key: "student", label: t("leads.filter.students") },
+      { key: "tech", label: t("leads.filter.tech") },
+      { key: "masa", label: t("leads.filter.masa") },
+      { key: "instructor", label: t("leads.filter.instructors") },
+    ];
+    const seen = new Set(opts.map((o) => o.key));
+    for (const lead of leads) {
+      const info = classifyLead(lead);
+      if (info.kind !== "custom") continue;
+      const key = getLeadFilterKey(lead);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      opts.push({ key, label: info.label });
+    }
+    return opts;
+  }, [leads]);
 
   const todayISO = new Date().toISOString().slice(0, 10);
   const newToday = leads.filter(
@@ -262,10 +284,9 @@ export default function DashboardClient() {
           className={filterClass}
         >
           <option value="">{t("leads.filter.leadType")}: {t("leads.filter.allTypes")}</option>
-          <option value="student">{t("leads.filter.students")}</option>
-          <option value="tech">{t("leads.filter.tech")}</option>
-          <option value="masa">{t("leads.filter.masa")}</option>
-          <option value="instructor">{t("leads.filter.instructors")}</option>
+          {typeFilterOptions.map((opt) => (
+            <option key={opt.key} value={opt.key}>{opt.label}</option>
+          ))}
         </select>
         <select
           value={sourceFilter}
