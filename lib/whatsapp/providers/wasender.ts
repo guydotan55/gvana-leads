@@ -9,6 +9,8 @@ import type {
 import { WhatsAppSendError } from "@/lib/whatsapp/types";
 import { clientConfig } from "@/client.config";
 import { normalizePhone } from "@/lib/phone";
+import { acquireSendLock, isDailyCapReached, computeJitterMs, sleep } from "@/lib/whatsapp/pacing";
+import { countSentTodayForSession } from "@/lib/whatsapp/dailyCount";
 
 interface RegistryEntry {
   language: string;
@@ -90,38 +92,55 @@ async function sendTemplateMessage(params: SendTemplateParams): Promise<SendTemp
   const text = renderBody(entry, params.placeholders);
   const to = normalizePhone(params.to).replace(/^\+/, ""); // Wasender wants digits, no '+'
 
-  const res = await fetch(`${baseUrl}/send-message`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "X-Session-Id": sessionId,
-    },
-    body: JSON.stringify({ to, text }),
-  });
-
-  const body = await res.text();
-  if (!res.ok) {
-    let kind: "auth" | "rate_limit" | "session_down" | "bad_request" | "upstream" = "upstream";
-    if (res.status === 401 || res.status === 403) kind = "auth";
-    else if (res.status === 429) kind = "rate_limit";
-    else if (/session is not connected/i.test(body)) kind = "session_down";
-    else if (res.status >= 400 && res.status < 500) kind = "bad_request";
-    throw new WhatsAppSendError("wasender", kind, `Wasender error ${res.status}`, res.status, body);
+  const dailyCap = clientConfig.integrations.whatsapp.dailyCap ?? 60;
+  if (await isDailyCapReached({ sessionId, cap: dailyCap, countTodayForSession: () => countSentTodayForSession(sessionId) })) {
+    throw new WhatsAppSendError(
+      "wasender",
+      "rate_limit",
+      `Daily cap of ${dailyCap} sends reached for session ${sessionId}`,
+      429,
+    );
   }
 
-  let parsed: { data?: { message_id?: string }; status?: string };
+  const release = await acquireSendLock(sessionId);
   try {
-    parsed = body ? JSON.parse(body) : {};
-  } catch {
-    throw new WhatsAppSendError("wasender", "upstream", "Non-JSON response from Wasender", res.status, body);
+    await sleep(computeJitterMs());
+
+    const res = await fetch(`${baseUrl}/send-message`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "X-Session-Id": sessionId,
+      },
+      body: JSON.stringify({ to, text }),
+    });
+
+    const body = await res.text();
+    if (!res.ok) {
+      let kind: "auth" | "rate_limit" | "session_down" | "bad_request" | "upstream" = "upstream";
+      if (res.status === 401 || res.status === 403) kind = "auth";
+      else if (res.status === 429) kind = "rate_limit";
+      else if (/session is not connected/i.test(body)) kind = "session_down";
+      else if (res.status >= 400 && res.status < 500) kind = "bad_request";
+      throw new WhatsAppSendError("wasender", kind, `Wasender error ${res.status}`, res.status, body);
+    }
+
+    let parsed: { data?: { message_id?: string }; status?: string };
+    try {
+      parsed = body ? JSON.parse(body) : {};
+    } catch {
+      throw new WhatsAppSendError("wasender", "upstream", "Non-JSON response from Wasender", res.status, body);
+    }
+    const messageId = parsed.data?.message_id;
+    if (!messageId) {
+      throw new WhatsAppSendError("wasender", "upstream", "Wasender returned no message_id", res.status, body);
+    }
+    return { messageId, status: parsed.status ?? "PENDING" };
+  } finally {
+    release();
   }
-  const messageId = parsed.data?.message_id;
-  if (!messageId) {
-    throw new WhatsAppSendError("wasender", "upstream", "Wasender returned no message_id", res.status, body);
-  }
-  return { messageId, status: parsed.status ?? "PENDING" };
 }
 
 export const wasenderProvider: WhatsAppProvider = {

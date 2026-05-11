@@ -6,6 +6,7 @@ import { sendCAPIEvent } from "@/lib/capi";
 import { isFeatureEnabled } from "@/lib/config";
 import { readFile } from "fs/promises";
 import path from "path";
+import { clientConfig } from "@/client.config";
 
 export const dynamic = "force-dynamic";
 
@@ -22,9 +23,13 @@ export async function GET(request: NextRequest) {
 
   try {
     const pending = await findPendingTriggers();
+    const batchSize = clientConfig.integrations.whatsapp.provider === "wasender"
+      ? (clientConfig.integrations.whatsapp.batchSize ?? 8)
+      : Infinity; // Infobip: no batching needed (no ban risk)
+    const slice = pending.slice(0, batchSize);
     const results = [];
 
-    for (const { trigger, lead } of pending) {
+    for (const { trigger, lead } of slice) {
       try {
         const mappingsPath = path.join(process.cwd(), "config", "template-mappings.json");
         const mappingsData = JSON.parse(await readFile(mappingsPath, "utf-8"));

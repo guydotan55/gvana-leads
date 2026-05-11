@@ -29,7 +29,20 @@ jest.mock("fs", () => ({
 }));
 
 describe("wasenderProvider — config & registry", () => {
-  beforeEach(() => { clearEnvs(); jest.resetModules(); });
+  beforeEach(() => {
+    clearEnvs();
+    jest.resetModules();
+    jest.doMock("@/lib/whatsapp/dailyCount", () => ({
+      countSentTodayForSession: async () => 0,
+    }));
+    jest.doMock("@/lib/whatsapp/pacing", () => ({
+      ...jest.requireActual("@/lib/whatsapp/pacing"),
+      computeJitterMs: () => 0,
+      sleep: async () => {},
+      acquireSendLock: async () => () => {},
+      isDailyCapReached: async () => false,
+    }));
+  });
 
   it("throws config error on missing envs", async () => {
     const { wasenderProvider } = await import("@/lib/whatsapp/providers/wasender");
@@ -71,6 +84,16 @@ describe("wasenderProvider — HTTP send", () => {
     jest.resetModules();
     global.fetch = fetchMock as unknown as typeof fetch;
     fetchMock.mockReset();
+    jest.doMock("@/lib/whatsapp/pacing", () => ({
+      ...jest.requireActual("@/lib/whatsapp/pacing"),
+      computeJitterMs: () => 0,
+      sleep: async () => {},
+      acquireSendLock: async () => () => {},
+      isDailyCapReached: async () => false,
+    }));
+    jest.doMock("@/lib/whatsapp/dailyCount", () => ({
+      countSentTodayForSession: async () => 0,
+    }));
   });
 
   it("POSTs to /send-message with rendered body and returns messageId", async () => {
@@ -126,5 +149,34 @@ describe("wasenderProvider — HTTP send", () => {
     await expect(
       wasenderProvider.sendTemplateMessage({ to: "0501234567", templateName: "first_contact_he", language: "he", placeholders: ["a", "b"] })
     ).rejects.toMatchObject({ kind: "upstream", status: 502 });
+  });
+});
+
+describe("wasenderProvider — pacing integration", () => {
+  const fetchMock = jest.fn();
+  beforeEach(() => {
+    setEnvs();
+    jest.resetModules();
+    global.fetch = fetchMock as unknown as typeof fetch;
+    fetchMock.mockReset();
+    // Restore the real pacing module so isDailyCapReached is not stubbed false
+    jest.dontMock("@/lib/whatsapp/pacing");
+  });
+
+  it("throws rate_limit when daily cap is reached", async () => {
+    jest.doMock("@/lib/whatsapp/dailyCount", () => ({
+      countSentTodayForSession: async () => 60,
+    }));
+    jest.doMock("@/client.config", () => ({
+      clientConfig: {
+        slug: "test-client",
+        integrations: { whatsapp: { provider: "wasender", dailyCap: 60, batchSize: 8 } },
+      },
+    }));
+    const { wasenderProvider } = await import("@/lib/whatsapp/providers/wasender");
+    await expect(
+      wasenderProvider.sendTemplateMessage({ to: "0501234567", templateName: "first_contact_he", language: "he", placeholders: ["a", "b"] })
+    ).rejects.toMatchObject({ kind: "rate_limit" });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
