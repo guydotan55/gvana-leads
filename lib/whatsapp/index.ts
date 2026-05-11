@@ -1,14 +1,9 @@
 import { clientConfig } from "@/client.config";
 import { infobipProvider } from "./providers/infobip";
+import { wasenderProvider } from "./providers/wasender";
 import type { WhatsAppProvider } from "./types";
 
 export * from "./types";
-
-const wasenderProvider: WhatsAppProvider = {
-  name: "wasender",
-  async sendTemplateMessage() { throw new Error("wasender provider not yet implemented"); },
-  async getTemplates() { throw new Error("wasender provider not yet implemented"); },
-};
 
 export function getWhatsAppProvider(): WhatsAppProvider {
   const choice = clientConfig.integrations.whatsapp.provider;

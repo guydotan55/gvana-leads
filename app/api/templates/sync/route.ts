@@ -10,7 +10,7 @@ export async function GET() {
   } catch (error) {
     console.error("Failed to sync templates:", error);
     return NextResponse.json(
-      { error: "Failed to sync templates from Infobip" },
+      { error: "Failed to sync templates" },
       { status: 500 }
     );
   }
