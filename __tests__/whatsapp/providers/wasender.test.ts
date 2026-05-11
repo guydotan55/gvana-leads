@@ -63,3 +63,68 @@ describe("wasenderProvider — config & registry", () => {
     ).rejects.toMatchObject({ name: "WhatsAppSendError", kind: "bad_request" });
   });
 });
+
+describe("wasenderProvider — HTTP send", () => {
+  const fetchMock = jest.fn();
+  beforeEach(() => {
+    setEnvs();
+    jest.resetModules();
+    global.fetch = fetchMock as unknown as typeof fetch;
+    fetchMock.mockReset();
+  });
+
+  it("POSTs to /send-message with rendered body and returns messageId", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: { message_id: "wa-123" }, status: "PENDING" }), { status: 200 }),
+    );
+    const { wasenderProvider } = await import("@/lib/whatsapp/providers/wasender");
+    const result = await wasenderProvider.sendTemplateMessage({
+      to: "0501234567",
+      templateName: "first_contact_he",
+      language: "he",
+      placeholders: ["דנה", "פייסבוק"],
+    });
+    expect(result.messageId).toBe("wa-123");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/api/send-message");
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.text).toContain("דנה");
+    expect(body.text).toContain("פייסבוק");
+    expect(body.text).not.toContain("{{1}}");
+  });
+
+  it("maps 401 → auth", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ message: "Unauthorized" }), { status: 401 }));
+    const { wasenderProvider } = await import("@/lib/whatsapp/providers/wasender");
+    await expect(
+      wasenderProvider.sendTemplateMessage({ to: "0501234567", templateName: "first_contact_he", language: "he", placeholders: ["a", "b"] })
+    ).rejects.toMatchObject({ kind: "auth", status: 401 });
+  });
+
+  it("maps 429 → rate_limit", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ retry_after: 5 }), { status: 429 }));
+    const { wasenderProvider } = await import("@/lib/whatsapp/providers/wasender");
+    await expect(
+      wasenderProvider.sendTemplateMessage({ to: "0501234567", templateName: "first_contact_he", language: "he", placeholders: ["a", "b"] })
+    ).rejects.toMatchObject({ kind: "rate_limit", status: 429 });
+  });
+
+  it("maps 'Session is not Connected' → session_down", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: "Session is not Connected" }), { status: 422 }),
+    );
+    const { wasenderProvider } = await import("@/lib/whatsapp/providers/wasender");
+    await expect(
+      wasenderProvider.sendTemplateMessage({ to: "0501234567", templateName: "first_contact_he", language: "he", placeholders: ["a", "b"] })
+    ).rejects.toMatchObject({ kind: "session_down" });
+  });
+
+  it("maps 5xx → upstream", async () => {
+    fetchMock.mockResolvedValueOnce(new Response("Bad Gateway", { status: 502 }));
+    const { wasenderProvider } = await import("@/lib/whatsapp/providers/wasender");
+    await expect(
+      wasenderProvider.sendTemplateMessage({ to: "0501234567", templateName: "first_contact_he", language: "he", placeholders: ["a", "b"] })
+    ).rejects.toMatchObject({ kind: "upstream", status: 502 });
+  });
+});

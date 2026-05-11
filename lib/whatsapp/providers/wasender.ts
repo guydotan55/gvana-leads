@@ -8,6 +8,7 @@ import type {
 } from "@/lib/whatsapp/types";
 import { WhatsAppSendError } from "@/lib/whatsapp/types";
 import { clientConfig } from "@/client.config";
+import { normalizePhone } from "@/lib/phone";
 
 interface RegistryEntry {
   language: string;
@@ -75,21 +76,52 @@ async function getTemplates(): Promise<WhatsAppTemplate[]> {
   }));
 }
 
-async function sendTemplateMessage(_params: SendTemplateParams): Promise<SendTemplateResult> {
-  getConfig();
+async function sendTemplateMessage(params: SendTemplateParams): Promise<SendTemplateResult> {
+  const { apiKey, baseUrl, sessionId } = getConfig();
   const registry = loadRegistry();
-  const entry = registry[_params.templateName];
+  const entry = registry[params.templateName];
   if (!entry) {
     throw new WhatsAppSendError(
       "wasender",
       "bad_request",
-      `Unknown template '${_params.templateName}' in registry for client '${clientConfig.slug}'`,
+      `Unknown template '${params.templateName}' in registry for client '${clientConfig.slug}'`,
     );
   }
-  // Validate placeholder count even before HTTP call
-  renderBody(entry, _params.placeholders);
-  // HTTP send is implemented in Task 5
-  throw new WhatsAppSendError("wasender", "upstream", "send not yet wired — Task 5");
+  const text = renderBody(entry, params.placeholders);
+  const to = normalizePhone(params.to).replace(/^\+/, ""); // Wasender wants digits, no '+'
+
+  const res = await fetch(`${baseUrl}/send-message`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "X-Session-Id": sessionId,
+    },
+    body: JSON.stringify({ to, text }),
+  });
+
+  const body = await res.text();
+  if (!res.ok) {
+    let kind: "auth" | "rate_limit" | "session_down" | "bad_request" | "upstream" = "upstream";
+    if (res.status === 401 || res.status === 403) kind = "auth";
+    else if (res.status === 429) kind = "rate_limit";
+    else if (/session is not connected/i.test(body)) kind = "session_down";
+    else if (res.status >= 400 && res.status < 500) kind = "bad_request";
+    throw new WhatsAppSendError("wasender", kind, `Wasender error ${res.status}`, res.status, body);
+  }
+
+  let parsed: { data?: { message_id?: string }; status?: string };
+  try {
+    parsed = body ? JSON.parse(body) : {};
+  } catch {
+    throw new WhatsAppSendError("wasender", "upstream", "Non-JSON response from Wasender", res.status, body);
+  }
+  const messageId = parsed.data?.message_id;
+  if (!messageId) {
+    throw new WhatsAppSendError("wasender", "upstream", "Wasender returned no message_id", res.status, body);
+  }
+  return { messageId, status: parsed.status ?? "PENDING" };
 }
 
 export const wasenderProvider: WhatsAppProvider = {
