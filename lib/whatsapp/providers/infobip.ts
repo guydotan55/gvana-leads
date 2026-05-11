@@ -94,9 +94,18 @@ async function sendTemplateMessage(
   });
 
   const message = data.messages?.[0];
+  if (!message?.messageId) {
+    throw new WhatsAppSendError(
+      "infobip",
+      "upstream",
+      "Infobip returned no messageId",
+      undefined,
+      JSON.stringify(data),
+    );
+  }
   return {
-    messageId: message?.messageId || "",
-    status: message?.status?.name || "UNKNOWN",
+    messageId: message.messageId,
+    status: message.status?.name ?? "UNKNOWN",
   };
 }
 
