@@ -5,13 +5,11 @@ const SLUG = "test-client";
 function setEnvs() {
   process.env.WASENDER_API_KEY = "test-key";
   process.env.WASENDER_BASE_URL = "https://www.wasenderapi.com/api";
-  process.env.WASENDER_SESSION_ID = "session-1";
 }
 
 function clearEnvs() {
   delete process.env.WASENDER_API_KEY;
   delete process.env.WASENDER_BASE_URL;
-  delete process.env.WASENDER_SESSION_ID;
 }
 
 jest.mock("@/client.config", () => ({
@@ -96,9 +94,12 @@ describe("wasenderProvider — HTTP send", () => {
     }));
   });
 
-  it("POSTs to /send-message with rendered body and returns messageId", async () => {
+  it("POSTs to /send-message with rendered body and returns messageId (real Wasender shape)", async () => {
     fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ data: { message_id: "wa-123" }, status: "PENDING" }), { status: 200 }),
+      new Response(
+        JSON.stringify({ success: true, data: { msgId: 100000, jid: "+972500000000", status: "in_progress" } }),
+        { status: 200 },
+      ),
     );
     const { wasenderProvider } = await import("@/lib/whatsapp/providers/wasender");
     const result = await wasenderProvider.sendTemplateMessage({
@@ -107,10 +108,14 @@ describe("wasenderProvider — HTTP send", () => {
       language: "he",
       placeholders: ["דנה", "פייסבוק"],
     });
-    expect(result.messageId).toBe("wa-123");
+    expect(result.messageId).toBe("100000"); // numeric msgId coerced to string
+    expect(result.status).toBe("in_progress");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain("/api/send-message");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer test-key");
+    expect(headers["X-Session-Id"]).toBeUndefined(); // no session-id header in real API
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body.text).toContain("דנה");
     expect(body.text).toContain("פייסבוק");

@@ -23,15 +23,21 @@ type Registry = Record<string, RegistryEntry>;
 function getConfig() {
   const apiKey = process.env.WASENDER_API_KEY;
   const baseUrl = process.env.WASENDER_BASE_URL;
-  const sessionId = process.env.WASENDER_SESSION_ID;
-  if (!apiKey || !baseUrl || !sessionId) {
+  if (!apiKey || !baseUrl) {
     throw new WhatsAppSendError(
       "wasender",
       "config",
-      "Missing WASENDER_API_KEY / WASENDER_BASE_URL / WASENDER_SESSION_ID",
+      "Missing WASENDER_API_KEY / WASENDER_BASE_URL",
     );
   }
-  return { apiKey, baseUrl, sessionId };
+  return { apiKey, baseUrl };
+}
+
+// One Vercel deployment = one client = one Wasender session/number.
+// Wasender's API has no session-id concept (the Bearer token IS the
+// session credential), so pacing + daily-cap key off the client slug.
+function sessionKey(): string {
+  return clientConfig.slug;
 }
 
 function loadRegistry(): Registry {
@@ -79,7 +85,7 @@ async function getTemplates(): Promise<WhatsAppTemplate[]> {
 }
 
 async function sendTemplateMessage(params: SendTemplateParams): Promise<SendTemplateResult> {
-  const { apiKey, baseUrl, sessionId } = getConfig();
+  const { apiKey, baseUrl } = getConfig();
   const registry = loadRegistry();
   const entry = registry[params.templateName];
   if (!entry) {
@@ -92,17 +98,18 @@ async function sendTemplateMessage(params: SendTemplateParams): Promise<SendTemp
   const text = renderBody(entry, params.placeholders);
   const to = normalizePhone(params.to).replace(/^\+/, ""); // Wasender wants digits, no '+'
 
+  const key = sessionKey();
   const dailyCap = clientConfig.integrations.whatsapp.dailyCap ?? 60;
-  if (await isDailyCapReached({ sessionId, cap: dailyCap, countTodayForSession: () => countSentTodayForSession(sessionId) })) {
+  if (await isDailyCapReached({ sessionId: key, cap: dailyCap, countTodayForSession: () => countSentTodayForSession(key) })) {
     throw new WhatsAppSendError(
       "wasender",
       "rate_limit",
-      `Daily cap of ${dailyCap} sends reached for session ${sessionId}`,
+      `Daily cap of ${dailyCap} sends reached for ${key}`,
       429,
     );
   }
 
-  const release = await acquireSendLock(sessionId);
+  const release = await acquireSendLock(key);
   try {
     await sleep(computeJitterMs());
 
@@ -112,7 +119,6 @@ async function sendTemplateMessage(params: SendTemplateParams): Promise<SendTemp
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
         Accept: "application/json",
-        "X-Session-Id": sessionId,
       },
       body: JSON.stringify({ to, text }),
     });
@@ -122,22 +128,22 @@ async function sendTemplateMessage(params: SendTemplateParams): Promise<SendTemp
       let kind: "auth" | "rate_limit" | "session_down" | "bad_request" | "upstream" = "upstream";
       if (res.status === 401 || res.status === 403) kind = "auth";
       else if (res.status === 429) kind = "rate_limit";
-      else if (/session is not connected/i.test(body)) kind = "session_down";
+      else if (/session is not connected|disconnected|not connected/i.test(body)) kind = "session_down";
       else if (res.status >= 400 && res.status < 500) kind = "bad_request";
       throw new WhatsAppSendError("wasender", kind, `Wasender error ${res.status}`, res.status, body);
     }
 
-    let parsed: { data?: { message_id?: string }; status?: string };
+    let parsed: { success?: boolean; data?: { msgId?: number | string; status?: string } };
     try {
       parsed = body ? JSON.parse(body) : {};
     } catch {
       throw new WhatsAppSendError("wasender", "upstream", "Non-JSON response from Wasender", res.status, body);
     }
-    const messageId = parsed.data?.message_id;
-    if (!messageId) {
-      throw new WhatsAppSendError("wasender", "upstream", "Wasender returned no message_id", res.status, body);
+    const rawId = parsed.data?.msgId;
+    if (rawId === undefined || rawId === null || rawId === "") {
+      throw new WhatsAppSendError("wasender", "upstream", "Wasender returned no msgId", res.status, body);
     }
-    return { messageId, status: parsed.status ?? "PENDING" };
+    return { messageId: String(rawId), status: parsed.data?.status ?? "in_progress" };
   } finally {
     release();
   }
