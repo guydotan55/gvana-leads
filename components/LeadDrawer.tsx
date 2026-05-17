@@ -40,9 +40,9 @@ interface LeadDrawerProps {
 const INTERVIEW_STATUSES = ["under_review", "accepted", "rejected"];
 const HANDLED_BY_OPTIONS = ["נדב", "תמר"];
 const PLAN_OPTIONS = [
-  { key: "short", labelKey: "leads.plan.short" },
-  { key: "long", labelKey: "leads.plan.long" },
-  { key: "tech", labelKey: "leads.plan.tech" },
+  { key: "short", labelKey: "leads.plan.short" as const },
+  { key: "long", labelKey: "leads.plan.long" as const },
+  { key: "tech", labelKey: "leads.plan.tech" as const },
 ];
 
 function formatDate(iso: string): string {
