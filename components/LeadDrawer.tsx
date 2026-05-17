@@ -27,10 +27,23 @@ import { clientConfig } from "@/client.config";
 import type { Lead } from "@/lib/sheets";
 import { classifyLead } from "@/lib/lead-type";
 
+export interface Template {
+  name: string;
+  language: string;
+}
+
 interface LeadDrawerProps {
   lead: Lead | null;
   open: boolean;
   focusSend?: boolean;
+  /**
+   * Optional pre-fetched template list. When provided, the drawer
+   * skips its own `/api/templates/mappings` fetch — handy when many
+   * drawers open per session (parent hoists the fetch once). When
+   * `null`, the drawer treats it as still-loading. When `undefined`,
+   * the drawer falls back to fetching itself.
+   */
+  templates?: Template[] | null;
   onClose: () => void;
   onStatusChange: (lead: Lead, status: string, attempts?: number, plan?: string) => void;
   onHandledByChange: (lead: Lead, handledBy: string) => void;
@@ -59,15 +72,11 @@ function formatDate(iso: string): string {
   }
 }
 
-interface Template {
-  name: string;
-  language: string;
-}
-
 export default function LeadDrawer({
   lead,
   open,
   focusSend,
+  templates: templatesProp,
   onClose,
   onStatusChange,
   onHandledByChange,
@@ -146,7 +155,7 @@ export default function LeadDrawer({
             onCommentChange={onCommentChange}
           />
           <div ref={sendSectionRef}>
-            <DrawerSend lead={renderLead} />
+            <DrawerSend lead={renderLead} templatesProp={templatesProp} />
           </div>
           <DrawerDetails lead={renderLead} />
         </div>
@@ -465,13 +474,25 @@ function DrawerComment({
   );
 }
 
-function DrawerSend({ lead }: { lead: Lead }) {
-  const [templates, setTemplates] = useState<Template[] | null>(null);
+function DrawerSend({
+  lead,
+  templatesProp,
+}: {
+  lead: Lead;
+  templatesProp?: Template[] | null;
+}) {
+  // When the parent hoists the fetch (DashboardClient does), we just
+  // mirror its value. Otherwise, fall back to a self-contained fetch
+  // so the drawer remains drop-in usable from other contexts.
+  const usingProp = templatesProp !== undefined;
+  const [localTemplates, setLocalTemplates] = useState<Template[] | null>(null);
+  const templates = usingProp ? templatesProp ?? null : localTemplates;
   const [picked, setPicked] = useState<string>("");
   const [sending, setSending] = useState(false);
   const [feedback, setFeedback] = useState<{ kind: "success" | "error"; msg: string } | null>(null);
 
   useEffect(() => {
+    if (usingProp) return;
     let cancelled = false;
     // Templates are derived from configured mappings (the only ones we
     // know how to fill in). If none, surface a link to the manager.
@@ -485,16 +506,16 @@ function DrawerSend({ lead }: { lead: Lead }) {
         const list: Template[] = Object.entries(data.mappings || {}).map(
           ([name, m]) => ({ name, language: (m as { language: string }).language || "he" })
         );
-        if (!cancelled) setTemplates(list);
+        if (!cancelled) setLocalTemplates(list);
       } catch (err) {
         console.error("Failed to load template mappings:", err);
-        if (!cancelled) setTemplates([]);
+        if (!cancelled) setLocalTemplates([]);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [usingProp]);
 
   async function handleSend() {
     if (!picked || sending) return;
