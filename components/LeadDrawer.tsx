@@ -102,15 +102,11 @@ export default function LeadDrawer({
     }
   }, [open, focusSend, renderLead?.row]);
 
-  // Lock body scroll while open (mobile)
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
+  // Intentionally NOT locking body scroll: the drawer's contract is
+  // "table stays visible behind for campaign context". Locking body
+  // overflow would defeat that — admins need to scroll the table while
+  // a lead is open to compare against neighboring rows. The click-catcher
+  // overlay (`bg-black/20`) already handles outside-click-to-close.
 
   if (!renderLead) return null;
 
