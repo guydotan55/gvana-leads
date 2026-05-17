@@ -8,12 +8,22 @@ import { useFormView } from "@/lib/use-form-view";
 
 interface Props {
   form: FormDef;
+  /**
+   * Render this form without firing analytics or accepting submissions.
+   * Used by the builder's live-preview pane: the user types into the
+   * editor, the rendered form updates, but no network traffic happens
+   * for partially-built forms.
+   */
+  preview?: boolean;
 }
 
 type FieldValue = string | string[];
 
-export default function DynamicForm({ form }: Props) {
-  useFormView(form.id, "builder");
+export default function DynamicForm({ form, preview = false }: Props) {
+  // Hook order must be stable, so always call useFormView. The hook has
+  // its own !slug guard, so passing an empty string in preview mode
+  // opts out without conditionally calling it.
+  useFormView(preview ? "" : form.id, "builder");
   const searchParams = useSearchParams();
   const utmSource = searchParams.get("utm_source") || "";
   const utmMedium = searchParams.get("utm_medium") || "";
@@ -55,6 +65,12 @@ export default function DynamicForm({ form }: Props) {
 
   async function handleSubmit() {
     if (!canSubmit || submitting) return;
+    if (preview) {
+      // Show the success state without hitting the network — lets the
+      // admin see the full "thank you" screen as it'll appear publicly.
+      setSubmitted(true);
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
