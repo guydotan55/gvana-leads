@@ -189,7 +189,7 @@ export async function listForms(): Promise<FormDef[]> {
  * stored id, and look for any intersection. NFC is the canonical form;
  * everything is compared on NFC bytes.
  */
-function slugVariants(s: string): string[] {
+export function slugVariants(s: string): string[] {
   const out = new Set<string>();
   const push = (v: string) => {
     if (!v) return;
@@ -207,19 +207,14 @@ function slugVariants(s: string): string[] {
 
 export async function getForm(id: string): Promise<FormDef | null> {
   const all = await listForms();
-  const wanted = new Set(
-    slugVariants(id).map((v) => {
-      try { return v.normalize("NFC"); } catch { return v; }
-    })
-  );
+  const toNFC = (v: string) => {
+    try { return v.normalize("NFC"); } catch { return v; }
+  };
+  const wanted = new Set(slugVariants(id).map(toNFC));
   for (const f of all) {
-    const candidates = new Set(
-      slugVariants(f.id).map((v) => {
-        try { return v.normalize("NFC"); } catch { return v; }
-      })
-    );
-    for (const c of candidates) {
-      if (wanted.has(c)) return f;
+    const candidates = slugVariants(f.id).map(toNFC);
+    for (let i = 0; i < candidates.length; i += 1) {
+      if (wanted.has(candidates[i])) return f;
     }
   }
   return null;
