@@ -3,9 +3,17 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import StatsBar from "./StatsBar";
 import LeadTable from "./LeadTable";
+import LeadDrawer from "./LeadDrawer";
+import UndoToast from "./UndoToast";
 import { t } from "@/lib/i18n";
 import type { Lead } from "@/lib/sheets";
 import { classifyLead, getLeadFilterKey } from "@/lib/lead-type";
+
+function leadKey(l: Lead): string {
+  return `${l.sheetTab}:${l.row}`;
+}
+
+const UNDO_DURATION_MS = 8000;
 
 const POLL_INTERVAL = 30_000;
 
@@ -27,6 +35,19 @@ export default function DashboardClient() {
   const [sourceFilter, setSourceFilter] = useState("");
   const [updateError, setUpdateError] = useState("");
   const skipNextPoll = useRef(false);
+
+  // Drawer state — single source of truth for "which lead is being
+  // edited in the slide-in panel". Storing the key (not the lead) lets
+  // us re-resolve against the latest polled data so the drawer stays
+  // in sync if a poll lands while it's open.
+  const [drawerKey, setDrawerKey] = useState<string | null>(null);
+  const [drawerFocusSend, setDrawerFocusSend] = useState(false);
+
+  // Optimistic delete — the lead is hidden from the list, the toast
+  // counts down, and only then does the API call fire. Tap "בטל" to
+  // bail out within the window. We retain the original `Lead` so
+  // restoring on undo is exact (status, comment, plan, etc).
+  const [pendingDelete, setPendingDelete] = useState<Lead | null>(null);
 
   const fetchLeads = useCallback(async () => {
     // Polling-skip flag: an optimistic-update handler set this so the
@@ -138,8 +159,35 @@ export default function DashboardClient() {
     }
   }
 
-  async function handleDelete(lead: Lead) {
+  // Stage delete (no API call). Marks the row as "pending delete" so
+  // the table grays + strikes it out; UndoToast counts down to commit.
+  function handleDelete(lead: Lead) {
+    // If there's already a pending delete, commit it first so we don't
+    // lose track of it (a second delete click effectively confirms the
+    // previous one). Then stage the new pending delete.
+    if (pendingDelete) {
+      commitDelete(pendingDelete).catch((err) =>
+        console.error("Failed to flush previous pending delete:", err)
+      );
+    }
+    // Close drawer if the lead being deleted was open
+    if (drawerKey === leadKey(lead)) {
+      setDrawerKey(null);
+    }
+    // Pause polling so the row doesn't pop back in mid-undo-window
+    skipNextPoll.current = true;
+    setPendingDelete(lead);
+  }
+
+  async function commitDelete(lead: Lead) {
+    setPendingDelete((curr) =>
+      curr && leadKey(curr) === leadKey(lead) ? null : curr
+    );
+
+    // Snapshot pre-delete list so we can restore on API failure
     const prevLeads = leads;
+
+    // Apply the actual list mutation (mirrors the server delete)
     setLeads((prev) =>
       prev
         .filter((l) => !(l.row === lead.row && l.sheetTab === lead.sheetTab))
@@ -165,14 +213,22 @@ export default function DashboardClient() {
         throw new Error(body?.error || "Delete failed");
       }
     } catch (err) {
+      console.error("commitDelete failed:", err);
       setLeads(prevLeads);
       skipNextPoll.current = false;
-      const msg = err instanceof Error && err.message.toLowerCase().includes("mismatch")
-        ? t("leads.delete.errorMismatch")
-        : t("leads.delete.errorGeneric");
+      const msg =
+        err instanceof Error && err.message.toLowerCase().includes("mismatch")
+          ? t("leads.delete.errorMismatch")
+          : t("leads.delete.errorGeneric");
       setUpdateError(msg);
       setTimeout(() => setUpdateError(""), 4000);
     }
+  }
+
+  function undoDelete() {
+    setPendingDelete(null);
+    // Allow polling to resume normally
+    skipNextPoll.current = false;
   }
 
   async function handleCommentChange(lead: Lead, comment: string) {
@@ -208,6 +264,23 @@ export default function DashboardClient() {
       return true;
     });
   }, [leads, typeFilter, sourceFilter]);
+
+  // The drawer's lead is re-resolved against current leads each render
+  // so polling and optimistic updates flow through automatically.
+  const drawerLead = useMemo(() => {
+    if (!drawerKey) return null;
+    return leads.find((l) => leadKey(l) === drawerKey) || null;
+  }, [leads, drawerKey]);
+
+  function handleOpenLead(lead: Lead, opts?: { focusSend?: boolean }) {
+    setDrawerKey(leadKey(lead));
+    setDrawerFocusSend(!!opts?.focusSend);
+  }
+
+  function handleCloseDrawer() {
+    setDrawerKey(null);
+    setDrawerFocusSend(false);
+  }
 
   // Type-filter options: 4 core kinds are always present (consistent UI even
   // before any leads load), plus one entry per builder-created form that
@@ -306,7 +379,28 @@ export default function DashboardClient() {
         onHandledByChange={handleHandledByChange}
         onCommentChange={handleCommentChange}
         onDelete={handleDelete}
+        onOpenLead={handleOpenLead}
+        pendingDeleteKey={pendingDelete ? leadKey(pendingDelete) : null}
       />
+      <LeadDrawer
+        lead={drawerLead}
+        open={!!drawerLead}
+        focusSend={drawerFocusSend}
+        onClose={handleCloseDrawer}
+        onStatusChange={handleStatusChange}
+        onHandledByChange={handleHandledByChange}
+        onCommentChange={handleCommentChange}
+      />
+      {pendingDelete && (
+        <UndoToast
+          key={leadKey(pendingDelete)}
+          message={`${t("leads.undo.deleted")} • ${pendingDelete.fullName || pendingDelete.phone || ""}`.trim()}
+          undoLabel={t("leads.undo.action")}
+          duration={UNDO_DURATION_MS}
+          onUndo={undoDelete}
+          onCommit={() => commitDelete(pendingDelete)}
+        />
+      )}
     </div>
   );
 }
