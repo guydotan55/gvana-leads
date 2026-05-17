@@ -21,6 +21,13 @@ export interface ClientConfig {
     label: string;
     color: "orange" | "blue" | "green" | "red" | "gray" | "purple";
   }>;
+  /**
+   * Names of staff members who handle leads. Surfaced as preset chips in
+   * the "handled by" picker (drawer + table). The "Other" option always
+   * remains available for ad-hoc names — these are just fast-paths.
+   * Keep client-specific; never hardcode names in components.
+   */
+  handlers: string[];
   features: {
     triggers: boolean;
     capi: boolean;
@@ -59,6 +66,7 @@ export const clientConfig: ClientConfig = {
     { key: "accepted", label: "התקבל", color: "green" },
     { key: "rejected", label: "נדחה", color: "red" },
   ],
+  handlers: ["נדב", "תמר"],
   features: {
     triggers: true,
     capi: true,

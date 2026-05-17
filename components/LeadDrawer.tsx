@@ -38,7 +38,6 @@ interface LeadDrawerProps {
 }
 
 const INTERVIEW_STATUSES = ["under_review", "accepted", "rejected"];
-const HANDLED_BY_OPTIONS = ["נדב", "תמר"];
 const PLAN_OPTIONS = [
   { key: "short", labelKey: "leads.plan.short" as const },
   { key: "long", labelKey: "leads.plan.long" as const },
@@ -317,21 +316,22 @@ function DrawerHandledBy({
   lead: Lead;
   onHandledByChange: (lead: Lead, handledBy: string) => void;
 }) {
-  const inPreset = HANDLED_BY_OPTIONS.includes(lead.handledBy);
+  const handlers = clientConfig.handlers;
+  const inPreset = handlers.includes(lead.handledBy);
   const [isOther, setIsOther] = useState(!!lead.handledBy && !inPreset);
   const [draft, setDraft] = useState(inPreset ? "" : lead.handledBy);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // Resync if the lead row got reloaded with a different value
-    if (HANDLED_BY_OPTIONS.includes(lead.handledBy)) {
+    if (handlers.includes(lead.handledBy)) {
       setIsOther(false);
       setDraft("");
     } else if (lead.handledBy) {
       setIsOther(true);
       setDraft(lead.handledBy);
     }
-  }, [lead.handledBy]);
+  }, [lead.handledBy, handlers]);
 
   function commitOther(value: string) {
     const trimmed = value.trim();
@@ -364,7 +364,7 @@ function DrawerHandledBy({
         >
           {t("leads.handledBy.select")}
         </button>
-        {HANDLED_BY_OPTIONS.map((name) => (
+        {handlers.map((name) => (
           <button
             key={name}
             type="button"

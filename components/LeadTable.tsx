@@ -160,8 +160,6 @@ function NotesExpander({ notes }: { notes: string }) {
 
 /* ---------- Handled By ---------- */
 
-const HANDLED_BY_OPTIONS = ["נדב", "תמר"];
-
 function HandledBySelect({
   lead,
   onChange,
@@ -169,8 +167,9 @@ function HandledBySelect({
   lead: Lead;
   onChange: (lead: Lead, handledBy: string) => void;
 }) {
+  const handlers = clientConfig.handlers;
   const [isOther, setIsOther] = useState(
-    lead.handledBy !== "" && !HANDLED_BY_OPTIONS.includes(lead.handledBy)
+    lead.handledBy !== "" && !handlers.includes(lead.handledBy)
   );
   // Only focus the input when the user JUST clicked "Other" — never on
   // the initial render. Previously, pre-existing custom values caused
@@ -206,7 +205,7 @@ function HandledBySelect({
         <input
           ref={inputRef}
           type="text"
-          defaultValue={HANDLED_BY_OPTIONS.includes(lead.handledBy) ? "" : lead.handledBy}
+          defaultValue={handlers.includes(lead.handledBy) ? "" : lead.handledBy}
           onBlur={(e) => {
             const val = e.target.value.trim();
             if (val) {
@@ -225,7 +224,7 @@ function HandledBySelect({
         <button
           onClick={() => {
             setIsOther(false);
-            if (!HANDLED_BY_OPTIONS.includes(lead.handledBy)) {
+            if (!handlers.includes(lead.handledBy)) {
               onChange(lead, "");
             }
           }}
@@ -244,7 +243,7 @@ function HandledBySelect({
       className="px-2 py-1.5 rounded text-xs border border-gray-200 bg-white text-gray-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-sky/30 min-h-[32px]"
     >
       <option value="">{t("leads.handledBy.select")}</option>
-      {HANDLED_BY_OPTIONS.map((name) => (
+      {handlers.map((name) => (
         <option key={name} value={name}>{name}</option>
       ))}
       <option value="__other__">{t("leads.handledBy.other")}</option>
