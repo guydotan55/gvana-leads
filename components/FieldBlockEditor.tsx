@@ -131,14 +131,10 @@ export default function FieldBlockEditor({
                 <input
                   type="text"
                   dir="ltr"
-                  value={(field as FormField & { validationPattern?: string }).validationPattern || ""}
-                  onChange={(e) =>
-                    onUpdate({
-                      ...({ validationPattern: e.target.value } as Partial<FormField>),
-                    })
-                  }
+                  value={field.validationPattern || ""}
+                  onChange={(e) => onUpdate({ validationPattern: e.target.value })}
                   placeholder="^[0-9]+$"
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm font-mono min-h-[40px]"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm font-mono min-h-[48px]"
                 />
                 <p className="text-[11px] text-gray-400 mt-1">תכונה זו תתווסף בקרוב — הערך יישמר כעת ולא יופעל.</p>
               </div>
