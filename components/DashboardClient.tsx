@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import StatsBar from "./StatsBar";
 import LeadTable from "./LeadTable";
-import LeadDrawer from "./LeadDrawer";
+import LeadDrawer, { type Template } from "./LeadDrawer";
 import UndoToast from "./UndoToast";
 import { t } from "@/lib/i18n";
 import type { Lead } from "@/lib/sheets";
@@ -43,11 +43,79 @@ export default function DashboardClient() {
   const [drawerKey, setDrawerKey] = useState<string | null>(null);
   const [drawerFocusSend, setDrawerFocusSend] = useState(false);
 
+  // Template mappings are session-scoped (Meta-approved template list
+  // changes only when an admin edits them in /templates). Fetching once
+  // on mount and passing into the drawer avoids 1 round-trip per lead
+  // opened. `null` = still loading, `[]` = no templates configured.
+  const [templates, setTemplates] = useState<Template[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/templates/mappings", {
+          credentials: "same-origin",
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const list: Template[] = Object.entries(data.mappings || {}).map(
+          ([name, m]) => ({ name, language: (m as { language: string }).language || "he" })
+        );
+        if (!cancelled) setTemplates(list);
+      } catch (err) {
+        console.error("Failed to load template mappings:", err);
+        if (!cancelled) setTemplates([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Optimistic delete — the lead is hidden from the list, the toast
   // counts down, and only then does the API call fire. Tap "בטל" to
   // bail out within the window. We retain the original `Lead` so
   // restoring on undo is exact (status, comment, plan, etc).
   const [pendingDelete, setPendingDelete] = useState<Lead | null>(null);
+  // Mirror of `pendingDelete` in a ref so the `beforeunload` handler
+  // (registered once, never re-bound) can read the latest value at
+  // unload time without re-subscribing on every state change.
+  const pendingDeleteRef = useRef<Lead | null>(null);
+  useEffect(() => {
+    pendingDeleteRef.current = pendingDelete;
+  }, [pendingDelete]);
+
+  // If the admin closes the tab while a delete is mid-undo-window, fire
+  // the DELETE as a keepalive request so the browser still sends it
+  // after the page is gone. `fetch({ keepalive: true })` is the modern
+  // equivalent of `sendBeacon` and — unlike sendBeacon — supports the
+  // DELETE method, which the API requires. If the network fails we just
+  // lose the delete (lead reappears next load); that matches the
+  // previous fire-and-forget behavior, just narrows the leak window.
+  useEffect(() => {
+    function handleBeforeUnload() {
+      const lead = pendingDeleteRef.current;
+      if (!lead) return;
+      try {
+        fetch(`/api/leads/${lead.row}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sheetTab: lead.sheetTab,
+            expectedLeadId: lead.leadId || undefined,
+          }),
+          keepalive: true,
+          credentials: "same-origin",
+        }).catch((err) => {
+          // Best-effort — the page is going away anyway.
+          console.error("beforeunload delete flush failed:", err);
+        });
+      } catch (err) {
+        console.error("beforeunload delete flush threw:", err);
+      }
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   const fetchLeads = useCallback(async () => {
     // Polling-skip flag: an optimistic-update handler set this so the
@@ -386,6 +454,7 @@ export default function DashboardClient() {
         lead={drawerLead}
         open={!!drawerLead}
         focusSend={drawerFocusSend}
+        templates={templates}
         onClose={handleCloseDrawer}
         onStatusChange={handleStatusChange}
         onHandledByChange={handleHandledByChange}
