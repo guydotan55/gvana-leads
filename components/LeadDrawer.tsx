@@ -287,7 +287,7 @@ function DrawerStatus({
                     key={opt.key}
                     type="button"
                     onClick={() => togglePlan(opt.key)}
-                    className={`min-h-[40px] px-3 py-2 rounded-full text-xs font-medium border transition-colors ${
+                    className={`min-h-[48px] px-3 py-2 rounded-full text-xs font-medium border transition-colors ${
                       active
                         ? "bg-blue-100 text-blue-700 border-blue-300"
                         : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
@@ -352,7 +352,7 @@ function DrawerHandledBy({
             setDraft("");
             onHandledByChange(lead, "");
           }}
-          className={`min-h-[40px] px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+          className={`min-h-[48px] px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
             !lead.handledBy
               ? "bg-gray-200 text-gray-800 border-gray-300"
               : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
@@ -369,7 +369,7 @@ function DrawerHandledBy({
               setDraft("");
               onHandledByChange(lead, name);
             }}
-            className={`min-h-[40px] px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+            className={`min-h-[48px] px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
               lead.handledBy === name
                 ? "bg-blue-100 text-blue-700 border-blue-300"
                 : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
@@ -381,7 +381,7 @@ function DrawerHandledBy({
         <button
           type="button"
           onClick={() => setIsOther(true)}
-          className={`min-h-[40px] px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+          className={`min-h-[48px] px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
             isOther
               ? "bg-blue-100 text-blue-700 border-blue-300"
               : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"

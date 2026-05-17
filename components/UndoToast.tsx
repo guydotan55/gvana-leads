@@ -74,7 +74,7 @@ export default function UndoToast({
           <button
             type="button"
             onClick={handleUndo}
-            className="inline-flex items-center justify-center min-w-[48px] min-h-[36px] px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-white/10 hover:bg-white/20 transition-colors"
+            className="inline-flex items-center justify-center min-w-[48px] min-h-[48px] px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-white/10 hover:bg-white/20 transition-colors"
           >
             {undoLabel}
           </button>
