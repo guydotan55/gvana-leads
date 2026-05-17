@@ -1,49 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { t } from "@/lib/i18n";
+import DynamicForm from "@/components/DynamicForm";
+import FieldBlockEditor from "@/components/FieldBlockEditor";
+import FieldTypePicker from "@/components/FieldTypePicker";
 import {
   STARTER_FIELDS,
   FORMS,
   type FormField,
   type FieldType,
-  type FieldOption,
+  type FormDef,
 } from "@/config/forms";
-
-const FIELD_TYPE_LABELS: Record<FieldType, string> = {
-  text: "טקסט קצר",
-  phone: "טלפון",
-  email: "אימייל",
-  number: "מספר",
-  date: "תאריך",
-  textarea: "טקסט ארוך",
-  radio: "בחירה יחידה",
-  checkbox: "בחירה מרובה",
-};
-
-const FIELD_TYPE_ICONS: Record<FieldType, string> = {
-  text: "Aa",
-  phone: "☏",
-  email: "@",
-  number: "123",
-  date: "📅",
-  textarea: "¶",
-  radio: "◉",
-  checkbox: "☑",
-};
-
-const ALL_FIELD_TYPES: FieldType[] = [
-  "text",
-  "phone",
-  "email",
-  "number",
-  "date",
-  "textarea",
-  "radio",
-  "checkbox",
-];
 
 function makeFieldId(label: string, existing: FormField[]): string {
   const base =
@@ -61,6 +31,17 @@ function makeFieldId(label: string, existing: FormField[]): string {
   return `${base}_${n}`;
 }
 
+const FIELD_TYPE_LABELS: Record<FieldType, string> = {
+  text: "טקסט",
+  phone: "טלפון",
+  email: "אימייל",
+  number: "מספר",
+  date: "תאריך",
+  textarea: "טקסט ארוך",
+  radio: "רשימה",
+  checkbox: "בחירה מרובה",
+};
+
 function newField(type: FieldType, existing: FormField[]): FormField {
   const label = `${FIELD_TYPE_LABELS[type]} חדש`;
   const id = makeFieldId(`${type}_${existing.length + 1}`, existing);
@@ -74,6 +55,9 @@ function newField(type: FieldType, existing: FormField[]): FormField {
   return base;
 }
 
+type SaveState = "idle" | "saving" | "saved" | "error" | "auth-expired";
+type MobileTab = "edit" | "preview";
+
 interface BuilderProps {
   editingId?: string;
 }
@@ -83,64 +67,106 @@ export default function FormBuilder({ editingId }: BuilderProps) {
   const searchParams = useSearchParams();
   const cloneSlug = searchParams.get("clone");
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [fields, setFields] = useState<FormField[]>(() => [...STARTER_FIELDS]);
-  const [loading, setLoading] = useState(!!editingId);
-  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<"draft" | "published">("draft");
+  const [loading, setLoading] = useState(!!editingId || !!cloneSlug);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState("");
+  const [showPicker, setShowPicker] = useState(false);
+  const [mobileTab, setMobileTab] = useState<MobileTab>("edit");
 
-  // Load existing form for edit, or seed from a clone source
+  // The current form id once it's been persisted. For new forms we start
+  // undefined and upgrade to the returned id after the first autosave.
+  const [formId, setFormId] = useState<string | undefined>(editingId);
+
+  // -------- Load existing form OR seed from clone --------
   useEffect(() => {
-    if (editingId) {
-      fetch(`/api/forms/${editingId}`)
-        .then((r) => r.json())
-        .then((data) => {
+    let cancelled = false;
+    async function load() {
+      if (editingId) {
+        try {
+          const res = await fetch(`/api/forms/${encodeURIComponent(editingId)}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          if (cancelled) return;
           if (data?.form) {
             setTitle(data.form.title || "");
             setSubtitle(data.form.subtitle || "");
             setFields(data.form.fields?.length ? data.form.fields : [...STARTER_FIELDS]);
+            setStatus(data.form.status === "published" ? "published" : "draft");
           }
-        })
-        .catch(() => setSaveError("שגיאה בטעינת הטופס"))
-        .finally(() => setLoading(false));
-    } else if (cloneSlug) {
-      const source = FORMS.find((f) => f.slug === cloneSlug);
-      if (source?.cloneTemplate) {
-        setTitle(`${source.title} (עותק)`);
-        setSubtitle(source.subtitle);
-        setFields(source.cloneTemplate.map((f) => ({ ...f, options: f.options ? [...f.options] : undefined })));
+        } catch (err) {
+          if (!cancelled) {
+            setSaveError(err instanceof Error ? err.message : "שגיאה בטעינת הטופס");
+          }
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+        return;
       }
+
+      if (cloneSlug) {
+        // 1) Try the hardcoded forms list.
+        const hardcoded = FORMS.find((f) => f.slug === cloneSlug);
+        if (hardcoded?.cloneTemplate) {
+          if (cancelled) return;
+          setTitle(`${hardcoded.title} (עותק)`);
+          setSubtitle(hardcoded.subtitle);
+          setFields(
+            hardcoded.cloneTemplate.map((f) => ({ ...f, options: f.options ? [...f.options] : undefined })),
+          );
+          setStatus("draft");
+          setLoading(false);
+          return;
+        }
+        // 2) Fall back to builder forms — the source may be another
+        //    user-created form via its id.
+        try {
+          const res = await fetch(`/api/forms/${encodeURIComponent(cloneSlug)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (!cancelled && data?.form) {
+              setTitle(`${data.form.title} (עותק)`);
+              setSubtitle(data.form.subtitle || "");
+              setFields(
+                (data.form.fields?.length ? data.form.fields : [...STARTER_FIELDS]).map((f: FormField) => ({
+                  ...f,
+                  options: f.options ? [...f.options] : undefined,
+                })),
+              );
+              setStatus("draft"); // always start clones as draft
+            }
+          }
+        } catch {
+          // non-fatal — fall through to empty starter fields
+        }
+        if (!cancelled) setLoading(false);
+        return;
+      }
+
+      if (!cancelled) setLoading(false);
     }
+    load();
+    return () => {
+      cancelled = true;
+    };
   }, [editingId, cloneSlug]);
 
-  const canStep1 = title.trim().length > 0;
-  const canStep2 = useMemo(() => {
-    if (fields.length === 0) return false;
-    const hasName = fields.some((f) => f.id === "fullName" || (f.type === "text" && f.required));
-    const hasPhone = fields.some((f) => f.type === "phone" && f.required);
-    if (!hasName || !hasPhone) return false;
-    for (const field of fields) {
-      if (!field.label.trim()) return false;
-      if ((field.type === "radio" || field.type === "checkbox") && (!field.options || field.options.length === 0)) {
-        return false;
-      }
-    }
-    return true;
-  }, [fields]);
-
-  function addField(type: FieldType) {
+  // -------- Field mutations --------
+  const addField = useCallback((type: FieldType) => {
     setFields((prev) => [...prev, newField(type, prev)]);
-  }
-  function removeField(id: string) {
+    setShowPicker(false);
+  }, []);
+  const removeField = useCallback((id: string) => {
     if (id === "fullName" || id === "phone") return;
     setFields((prev) => prev.filter((f) => f.id !== id));
-  }
-  function updateField(id: string, patch: Partial<FormField>) {
+  }, []);
+  const updateField = useCallback((id: string, patch: Partial<FormField>) => {
     setFields((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
-  }
-  function moveField(id: string, dir: -1 | 1) {
+  }, []);
+  const moveField = useCallback((id: string, dir: -1 | 1) => {
     setFields((prev) => {
       const idx = prev.findIndex((f) => f.id === id);
       if (idx === -1) return prev;
@@ -150,554 +176,390 @@ export default function FormBuilder({ editingId }: BuilderProps) {
       [next[idx], next[target]] = [next[target], next[idx]];
       return next;
     });
-  }
+  }, []);
 
-  async function handlePublish() {
-    if (saving) return;
-    setSaving(true);
-    setSaveError("");
-    try {
-      const method = editingId ? "PUT" : "POST";
-      const url = editingId ? `/api/forms/${editingId}` : "/api/forms";
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, subtitle, fields, status: "published" }),
-      });
-      if (res.status === 401) {
-        throw new Error("ההפעלה פגה — פתח/י את הדף ב‑/login בכרטיסייה חדשה, התחבר/י, ואז חזור/י לכאן ונסה/י שוב");
+  // -------- Validation (preview-only — saves still go through) --------
+  const previewForm = useMemo<FormDef>(
+    () => ({
+      id: formId || "preview",
+      title: title || "הטופס שלך",
+      subtitle: subtitle || undefined,
+      status: "published",
+      createdAt: "",
+      updatedAt: "",
+      sheetTab: "",
+      fields,
+    }),
+    [formId, title, subtitle, fields],
+  );
+
+  const validationErrors = useMemo(() => {
+    const errs: string[] = [];
+    if (!title.trim()) errs.push("הוספת שם לטופס");
+    if (fields.length === 0) errs.push("הוספת לפחות שאלה אחת");
+    const hasName = fields.some((f) => f.id === "fullName");
+    const hasPhone = fields.some((f) => f.id === "phone");
+    if (!hasName) errs.push("שדה שם מלא");
+    if (!hasPhone) errs.push("שדה טלפון");
+    for (const f of fields) {
+      if (!f.label.trim()) {
+        errs.push(`כותרת ריקה בשאלה`);
+        break;
       }
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error || `HTTP ${res.status}`);
+      if ((f.type === "radio" || f.type === "checkbox") && (!f.options || f.options.length === 0)) {
+        errs.push(`חסרות אפשרויות בשאלה "${f.label}"`);
       }
-      router.push("/forms");
-      router.refresh();
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "שגיאה בשמירה");
-    } finally {
-      setSaving(false);
     }
+    return errs;
+  }, [title, fields]);
+
+  // -------- Autosave (debounced 1.5s) --------
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inFlight = useRef(false);
+  const lastSavedSnapshot = useRef<string>("");
+  // Don't autosave the empty seed before the user has touched anything.
+  const userTouched = useRef(false);
+
+  const persist = useCallback(
+    async (overrideStatus?: "draft" | "published") => {
+      if (inFlight.current) return;
+      if (!title.trim() || validationErrors.length > 0) return;
+      const payload = {
+        title,
+        subtitle,
+        fields,
+        status: overrideStatus || status,
+      };
+      const snapshot = JSON.stringify(payload);
+      if (snapshot === lastSavedSnapshot.current && formId) return;
+      inFlight.current = true;
+      setSaveState("saving");
+      setSaveError("");
+      try {
+        const method = formId ? "PUT" : "POST";
+        const url = formId ? `/api/forms/${encodeURIComponent(formId)}` : "/api/forms";
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: snapshot,
+        });
+        if (res.status === 401) {
+          setSaveState("auth-expired");
+          setSaveError("ההפעלה פגה — פתחי את הדף ב‑/login בכרטיסייה חדשה, התחברי, וחזרי לכאן");
+          return;
+        }
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error || `HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        if (data?.form?.id && !formId) {
+          setFormId(data.form.id);
+          // Swap the URL to the edit route so a refresh doesn't fork
+          // into a duplicate. replace() (not push) keeps history clean.
+          router.replace(`/forms/${encodeURIComponent(data.form.id)}/edit`);
+        }
+        lastSavedSnapshot.current = snapshot;
+        setSaveState("saved");
+      } catch (err) {
+        setSaveState("error");
+        setSaveError(err instanceof Error ? err.message : "שגיאה בשמירה");
+      } finally {
+        inFlight.current = false;
+      }
+    },
+    [title, subtitle, fields, status, formId, router, validationErrors.length],
+  );
+
+  // Mark user-touched once any state diverges from the load.
+  useEffect(() => {
+    if (loading) return;
+    userTouched.current = true;
+  }, [title, subtitle, fields, status, loading]);
+
+  // Trigger debounced autosave.
+  useEffect(() => {
+    if (loading) return;
+    if (!userTouched.current) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      persist();
+    }, 1500);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [title, subtitle, fields, status, persist, loading]);
+
+  // Toggle publish — saves immediately at the new status, no debounce.
+  async function togglePublished(next: boolean) {
+    const nextStatus = next ? "published" : "draft";
+    setStatus(nextStatus);
+    // Persist immediately under the new status.
+    await persist(nextStatus);
   }
 
   if (loading) {
     return <p className="text-gray-400">{t("common.loading")}</p>;
   }
 
+  const isPublished = status === "published";
+  const publicUrl = formId ? `/form/${encodeURIComponent(formId)}` : null;
+
   return (
-    <div className="max-w-3xl mx-auto">
-      <header className="flex items-start justify-between gap-3 mb-5">
-        <div>
-          <h1 className="text-2xl font-bold text-brand-navy">
-            {editingId ? "עריכת טופס" : "טופס חדש"}
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            צור טופס לידים חדש ב-3 שלבים פשוטים
+    <div className="max-w-6xl mx-auto">
+      {/* --- Top bar --- */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5 mb-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <Link href="/forms" className="text-xs text-gray-500 hover:text-gray-700 inline-flex items-center gap-1 mb-2">
+              ← חזרה לרשימת הטפסים
+            </Link>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="שם הטופס"
+              className="w-full text-2xl font-bold text-brand-navy bg-transparent border-0 outline-none focus:bg-gray-50 rounded px-2 -mx-2 py-0.5 placeholder:text-gray-300"
+              aria-label="שם הטופס"
+            />
+            <input
+              type="text"
+              value={subtitle}
+              onChange={(e) => setSubtitle(e.target.value)}
+              placeholder="תיאור קצר (אופציונלי)"
+              className="w-full mt-1 text-sm text-gray-600 bg-transparent border-0 outline-none focus:bg-gray-50 rounded px-2 -mx-2 py-0.5 placeholder:text-gray-300"
+              aria-label="תיאור קצר"
+            />
+          </div>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <PublishToggle
+              checked={isPublished}
+              onChange={togglePublished}
+              disabled={!formId && validationErrors.length > 0}
+            />
+            <SaveIndicator state={saveState} />
+          </div>
+        </div>
+
+        {saveError && (
+          <div
+            className={`mt-3 p-2.5 rounded-lg text-sm border ${
+              saveState === "auth-expired"
+                ? "bg-amber-50 border-amber-200 text-amber-800"
+                : "bg-red-50 border-red-200 text-red-700"
+            }`}
+          >
+            {saveError}
+          </div>
+        )}
+
+        {isPublished && publicUrl && (
+          <div className="mt-3 p-2.5 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-xs text-green-800">
+              הטופס פתוח לקבלת הרשמות. הקישור הציבורי:
+            </p>
+            <code dir="ltr" className="font-mono text-xs text-gray-700 bg-white border border-gray-200 rounded px-2 py-1 truncate max-w-full">
+              {publicUrl}
+            </code>
+          </div>
+        )}
+      </div>
+
+      {/* --- Mobile tab toggle (sticky) --- */}
+      <div className="md:hidden sticky top-0 z-10 bg-gray-50/95 backdrop-blur py-2 -mx-4 px-4 border-b border-gray-100 mb-3">
+        <div className="inline-flex w-full bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setMobileTab("edit")}
+            className={`flex-1 min-h-[40px] rounded-md text-sm font-semibold transition-all ${
+              mobileTab === "edit" ? "bg-brand-navy text-white shadow-sm" : "text-gray-600"
+            }`}
+          >
+            עריכה
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileTab("preview")}
+            className={`flex-1 min-h-[40px] rounded-md text-sm font-semibold transition-all ${
+              mobileTab === "preview" ? "bg-brand-navy text-white shadow-sm" : "text-gray-600"
+            }`}
+          >
+            תצוגה מקדימה
+          </button>
+        </div>
+      </div>
+
+      {/* --- Two-pane layout --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Left pane: editor */}
+        <section
+          className={`bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5 ${
+            mobileTab === "edit" ? "" : "hidden md:block"
+          }`}
+          aria-label="עריכת שאלות"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-semibold text-gray-900">שאלות הטופס</h2>
+            <span className="text-xs text-gray-400">{fields.length} שאלות</span>
+          </div>
+          <p className="text-xs text-gray-500 mb-3">
+            שדות &quot;שם מלא&quot; ו&quot;טלפון&quot; הם בסיס הטופס ולא ניתן להסיר אותם.
           </p>
-        </div>
-        <Link href="/forms" className="text-sm text-gray-500 hover:text-gray-700">
-          ← חזרה לרשימת הטפסים
-        </Link>
-      </header>
 
-      <StepperBar step={step} />
+          <ol className="space-y-2.5">
+            {fields.map((field, i) => (
+              <FieldBlockEditor
+                key={field.id}
+                field={field}
+                index={i}
+                total={fields.length}
+                isLocked={field.id === "fullName" || field.id === "phone"}
+                onUpdate={(patch) => updateField(field.id, patch)}
+                onRemove={() => removeField(field.id)}
+                onMove={(dir) => moveField(field.id, dir)}
+              />
+            ))}
+          </ol>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-7 mt-4">
-        {step === 1 && (
-          <Step1Basics
-            title={title}
-            subtitle={subtitle}
-            onTitle={setTitle}
-            onSubtitle={setSubtitle}
-            onNext={() => setStep(2)}
-            canNext={canStep1}
-          />
-        )}
-        {step === 2 && (
-          <Step2Fields
-            fields={fields}
-            onAdd={addField}
-            onRemove={removeField}
-            onUpdate={updateField}
-            onMove={moveField}
-            onBack={() => setStep(1)}
-            onNext={() => setStep(3)}
-            canNext={canStep2}
-          />
-        )}
-        {step === 3 && (
-          <Step3Preview
-            title={title}
-            subtitle={subtitle}
-            fields={fields}
-            onBack={() => setStep(2)}
-            onPublish={handlePublish}
-            saving={saving}
-            error={saveError}
-            isEditing={!!editingId}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Stepper bar ---------- */
-
-function StepperBar({ step }: { step: 1 | 2 | 3 }) {
-  const items = [
-    { n: 1, label: "פרטי הטופס" },
-    { n: 2, label: "שאלות" },
-    { n: 3, label: "תצוגה ופרסום" },
-  ];
-  return (
-    <ol className="flex items-center gap-2 sm:gap-3" aria-label="שלבים">
-      {items.map((item, i) => {
-        const active = step === item.n;
-        const done = step > item.n;
-        return (
-          <li key={item.n} className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-            <div
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold flex-1 min-w-0 transition-colors ${
-                active
-                  ? "bg-brand-navy text-white shadow-md"
-                  : done
-                  ? "bg-green-50 text-green-700 ring-1 ring-green-200"
-                  : "bg-gray-50 text-gray-400"
-              }`}
-            >
-              <span
-                className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs ${
-                  active ? "bg-white/20" : done ? "bg-green-200" : "bg-gray-200"
-                }`}
-              >
-                {done ? "✓" : item.n}
-              </span>
-              <span className="truncate">{item.label}</span>
-            </div>
-            {i < items.length - 1 && <span className="hidden sm:block w-4 h-px bg-gray-200" />}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-/* ---------- Step 1: Basics ---------- */
-
-function Step1Basics({
-  title,
-  subtitle,
-  onTitle,
-  onSubtitle,
-  onNext,
-  canNext,
-}: {
-  title: string;
-  subtitle: string;
-  onTitle: (v: string) => void;
-  onSubtitle: (v: string) => void;
-  onNext: () => void;
-  canNext: boolean;
-}) {
-  return (
-    <div className="space-y-5">
-      <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-1.5">שם הטופס *</label>
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => onTitle(e.target.value)}
-          placeholder="לדוגמה: קמפיין אביב 2026"
-          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-base focus:border-brand-sky focus:ring-2 focus:ring-brand-sky/20 outline-none"
-        />
-        <p className="text-xs text-gray-500 mt-1">
-          השם יוצג בראש הטופס ויהיה גם שם הטאב בגיליון
-        </p>
-      </div>
-      <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-1.5">תיאור קצר (אופציונלי)</label>
-        <input
-          type="text"
-          value={subtitle}
-          onChange={(e) => onSubtitle(e.target.value)}
-          placeholder="המשפט שמתחת לכותרת"
-          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-base focus:border-brand-sky focus:ring-2 focus:ring-brand-sky/20 outline-none"
-        />
-      </div>
-      <div className="flex justify-end pt-2">
-        <button
-          type="button"
-          onClick={onNext}
-          disabled={!canNext}
-          className="px-6 py-2.5 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 text-white text-sm font-bold shadow-md hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-        >
-          המשך →
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Step 2: Fields ---------- */
-
-function Step2Fields({
-  fields,
-  onAdd,
-  onRemove,
-  onUpdate,
-  onMove,
-  onBack,
-  onNext,
-  canNext,
-}: {
-  fields: FormField[];
-  onAdd: (type: FieldType) => void;
-  onRemove: (id: string) => void;
-  onUpdate: (id: string, patch: Partial<FormField>) => void;
-  onMove: (id: string, dir: -1 | 1) => void;
-  onBack: () => void;
-  onNext: () => void;
-  canNext: boolean;
-}) {
-  const [showAddMenu, setShowAddMenu] = useState(false);
-  return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold text-gray-900">שאלות הטופס</h2>
-        <p className="text-xs text-gray-500 mt-1">
-          שדות &quot;שם מלא&quot; ו&quot;טלפון&quot; הם שדות חובה ומוצמדים. אפשר לערוך את הכותרת אבל לא להסיר אותם.
-        </p>
-      </div>
-
-      <ol className="space-y-2">
-        {fields.map((field, i) => (
-          <FieldEditor
-            key={field.id}
-            field={field}
-            index={i}
-            total={fields.length}
-            isLocked={field.id === "fullName" || field.id === "phone"}
-            onRemove={() => onRemove(field.id)}
-            onUpdate={(patch) => onUpdate(field.id, patch)}
-            onMove={(dir) => onMove(field.id, dir)}
-          />
-        ))}
-      </ol>
-
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setShowAddMenu((v) => !v)}
-          className="w-full px-4 py-3 rounded-xl border-2 border-dashed border-gray-300 text-sm font-semibold text-gray-600 hover:border-brand-sky hover:text-brand-sky hover:bg-sky-50/40 transition-colors"
-        >
-          + הוסף שאלה
-        </button>
-        {showAddMenu && (
-          <div className="absolute z-10 inset-x-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-lg p-2 grid grid-cols-2 gap-1">
-            {ALL_FIELD_TYPES.map((type) => (
+          <div className="mt-3">
+            {showPicker ? (
+              <FieldTypePicker
+                onPick={(type) => addField(type)}
+                onCancel={() => setShowPicker(false)}
+              />
+            ) : (
               <button
-                key={type}
                 type="button"
-                onClick={() => {
-                  onAdd(type);
-                  setShowAddMenu(false);
-                }}
-                className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-gray-700 hover:bg-gray-50 text-start"
+                onClick={() => setShowPicker(true)}
+                className="w-full px-4 py-3 rounded-xl border-2 border-dashed border-gray-300 text-sm font-semibold text-gray-600 hover:border-brand-sky hover:text-brand-sky hover:bg-sky-50/40 transition-colors min-h-[48px]"
               >
-                <span className="w-7 h-7 rounded-md bg-gray-100 text-gray-600 font-mono text-xs flex items-center justify-center">
-                  {FIELD_TYPE_ICONS[type]}
-                </span>
-                {FIELD_TYPE_LABELS[type]}
+                + הוסף שדה
               </button>
-            ))}
+            )}
           </div>
-        )}
-      </div>
 
-      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-        <button
-          type="button"
-          onClick={onBack}
-          className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900"
-        >
-          ← חזור
-        </button>
-        <button
-          type="button"
-          onClick={onNext}
-          disabled={!canNext}
-          className="px-6 py-2.5 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 text-white text-sm font-bold shadow-md hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-        >
-          המשך →
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function FieldEditor({
-  field,
-  index,
-  total,
-  isLocked,
-  onRemove,
-  onUpdate,
-  onMove,
-}: {
-  field: FormField;
-  index: number;
-  total: number;
-  isLocked: boolean;
-  onRemove: () => void;
-  onUpdate: (patch: Partial<FormField>) => void;
-  onMove: (dir: -1 | 1) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const hasOptions = field.type === "radio" || field.type === "checkbox";
-  return (
-    <li className="bg-gray-50/50 border border-gray-200 rounded-xl overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2.5">
-        <div className="flex flex-col">
-          <button
-            type="button"
-            onClick={() => onMove(-1)}
-            disabled={index === 0}
-            className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-30"
-            aria-label="העלה"
-          >
-            ▲
-          </button>
-          <button
-            type="button"
-            onClick={() => onMove(1)}
-            disabled={index === total - 1}
-            className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-30"
-            aria-label="הורד"
-          >
-            ▼
-          </button>
-        </div>
-        <span className="w-7 h-7 rounded-md bg-white text-gray-600 font-mono text-xs flex items-center justify-center border border-gray-200 shrink-0">
-          {FIELD_TYPE_ICONS[field.type]}
-        </span>
-        <input
-          type="text"
-          value={field.label}
-          onChange={(e) => onUpdate({ label: e.target.value })}
-          className="flex-1 min-w-0 px-2 py-1.5 bg-white border border-gray-200 rounded-md text-sm font-medium focus:border-brand-sky focus:ring-1 focus:ring-brand-sky/30 outline-none"
-        />
-        <span className="text-xs text-gray-500 shrink-0 hidden sm:inline">{FIELD_TYPE_LABELS[field.type]}</span>
-        <label className="flex items-center gap-1 text-xs text-gray-600 select-none cursor-pointer">
-          <input
-            type="checkbox"
-            checked={field.required}
-            onChange={(e) => onUpdate({ required: e.target.checked })}
-            disabled={isLocked}
-            className="rounded"
-          />
-          חובה
-        </label>
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="w-7 h-7 rounded-md text-gray-500 hover:text-gray-800 hover:bg-white"
-          title="ערוך הגדרות"
-          aria-label="ערוך הגדרות"
-        >
-          ⚙
-        </button>
-        <button
-          type="button"
-          onClick={onRemove}
-          disabled={isLocked}
-          className="w-7 h-7 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400"
-          title={isLocked ? "שדה מוצמד" : "מחק"}
-          aria-label="מחק"
-        >
-          ✕
-        </button>
-      </div>
-      {expanded && (
-        <div className="px-3 pb-3 space-y-2 border-t border-gray-200 bg-white">
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">טקסט עזר (placeholder)</label>
-            <input
-              type="text"
-              value={field.placeholder || ""}
-              onChange={(e) => onUpdate({ placeholder: e.target.value })}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm"
-            />
-          </div>
-          {hasOptions && (
-            <OptionsEditor
-              options={field.options || []}
-              onChange={(options) => onUpdate({ options })}
-            />
-          )}
-        </div>
-      )}
-    </li>
-  );
-}
-
-function OptionsEditor({
-  options,
-  onChange,
-}: {
-  options: FieldOption[];
-  onChange: (next: FieldOption[]) => void;
-}) {
-  function update(i: number, patch: Partial<FieldOption>) {
-    const next = options.map((o, idx) => (idx === i ? { ...o, ...patch } : o));
-    onChange(next);
-  }
-  function remove(i: number) {
-    onChange(options.filter((_, idx) => idx !== i));
-  }
-  function add() {
-    const n = options.length + 1;
-    const label = `אפשרות ${n}`;
-    onChange([...options, { value: label, label }]);
-  }
-  return (
-    <div>
-      <label className="block text-xs font-semibold text-gray-600 mb-1">אפשרויות</label>
-      <div className="space-y-1.5">
-        {options.map((opt, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <input
-              type="text"
-              value={opt.label}
-              onChange={(e) => update(i, { label: e.target.value, value: e.target.value })}
-              className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-md text-sm"
-            />
-            <button
-              type="button"
-              onClick={() => remove(i)}
-              disabled={options.length <= 1}
-              className="w-7 h-7 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30"
-              aria-label="מחק אפשרות"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-      </div>
-      <button
-        type="button"
-        onClick={add}
-        className="mt-2 text-xs font-semibold text-brand-sky hover:underline"
-      >
-        + הוסף אפשרות
-      </button>
-    </div>
-  );
-}
-
-/* ---------- Step 3: Preview & Publish ---------- */
-
-function Step3Preview({
-  title,
-  subtitle,
-  fields,
-  onBack,
-  onPublish,
-  saving,
-  error,
-  isEditing,
-}: {
-  title: string;
-  subtitle: string;
-  fields: FormField[];
-  onBack: () => void;
-  onPublish: () => void;
-  saving: boolean;
-  error: string;
-  isEditing: boolean;
-}) {
-  return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold text-gray-900">תצוגה מקדימה</h2>
-        <p className="text-xs text-gray-500 mt-1">כך הטופס ייראה למבקרים. בדוק ואחר כך פרסם.</p>
-      </div>
-
-      <div className="bg-gradient-to-br from-blue-50 to-orange-50/30 border border-gray-200 rounded-xl p-5">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 max-w-md mx-auto">
-          <h3 className="text-lg font-bold text-brand-navy text-center mb-1">{title || "—"}</h3>
-          {subtitle && <p className="text-sm text-gray-500 text-center mb-4">{subtitle}</p>}
-          <div className="space-y-3">
-            {fields.map((field) => (
-              <PreviewField key={field.id} field={field} />
-            ))}
-            <button
-              type="button"
-              disabled
-              className="w-full py-2.5 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 text-white text-sm font-bold opacity-90 cursor-default"
-            >
-              שליחה
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {error}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-        <button
-          type="button"
-          onClick={onBack}
-          disabled={saving}
-          className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900"
-        >
-          ← חזור
-        </button>
-        <button
-          type="button"
-          onClick={onPublish}
-          disabled={saving}
-          className="px-6 py-2.5 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 text-white text-sm font-bold shadow-md hover:shadow-lg disabled:opacity-50 transition-all"
-        >
-          {saving ? "שומר..." : isEditing ? "שמור שינויים" : "פרסם טופס"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function PreviewField({ field }: { field: FormField }) {
-  return (
-    <div>
-      <label className="block text-xs font-semibold text-gray-600 mb-1">
-        {field.label}{field.required && " *"}
-      </label>
-      {field.type === "textarea" ? (
-        <textarea disabled rows={2} placeholder={field.placeholder} className="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-md text-sm" />
-      ) : field.type === "radio" || field.type === "checkbox" ? (
-        <div className="space-y-1">
-          {(field.options || []).slice(0, 3).map((opt) => (
-            <div key={opt.value} className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-md text-xs text-gray-700">
-              <span className="w-3.5 h-3.5 border border-gray-400 rounded-sm" />
-              {opt.label}
+          {validationErrors.length > 0 && (
+            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-xs font-semibold text-amber-900 mb-1">לפני פרסום:</p>
+              <ul className="text-xs text-amber-800 space-y-0.5 list-disc pe-4">
+                {validationErrors.map((e, i) => (
+                  <li key={i}>{e}</li>
+                ))}
+              </ul>
             </div>
-          ))}
-          {(field.options?.length || 0) > 3 && (
-            <p className="text-[11px] text-gray-400 px-2">ועוד {(field.options?.length || 0) - 3}…</p>
           )}
-        </div>
-      ) : (
-        <input
-          type={field.type === "date" ? "date" : field.type === "number" ? "number" : "text"}
-          disabled
-          placeholder={field.placeholder}
-          className="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-md text-sm"
-        />
-      )}
+        </section>
+
+        {/* Right pane: live preview */}
+        <section
+          className={`bg-gradient-to-br from-blue-50 to-orange-50/30 rounded-2xl border border-gray-100 shadow-sm overflow-hidden ${
+            mobileTab === "preview" ? "" : "hidden md:block"
+          }`}
+          aria-label="תצוגה מקדימה"
+        >
+          <div className="px-4 sm:px-5 py-3 bg-white/70 border-b border-gray-100 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-gray-700">תצוגה מקדימה</h2>
+            <span className="text-[11px] uppercase tracking-wider font-semibold text-gray-400">
+              כך הטופס ייראה למבקרים
+            </span>
+          </div>
+          <div className="preview-frame">
+            <DynamicForm form={previewForm} preview />
+          </div>
+        </section>
+      </div>
+
+      <style jsx>{`
+        /* Scope the preview's full-page background to its container.
+           The inner DynamicForm uses position: fixed for its decoration
+           blobs; we trap them with overflow + relative parent. */
+        .preview-frame {
+          position: relative;
+          overflow: hidden;
+          max-height: 75vh;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        .preview-frame :global(.form-page) {
+          min-height: auto;
+          padding: 20px 16px;
+        }
+        .preview-frame :global(.bg-decoration) {
+          position: absolute;
+        }
+      `}</style>
     </div>
   );
+}
+
+/* ---------- Publish toggle ---------- */
+
+function PublishToggle({
+  checked,
+  onChange,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  disabled: boolean;
+}) {
+  return (
+    <label
+      className={`inline-flex items-center gap-2 cursor-pointer select-none ${
+        disabled ? "opacity-50 cursor-not-allowed" : ""
+      }`}
+      title={disabled ? "מלאי את שם הטופס והשדות החסרים לפני פתיחה לקבלת הרשמות" : ""}
+    >
+      <span className="text-sm font-semibold text-gray-800">פתח לקבלת הרשמות</span>
+      <span
+        className={`relative inline-block w-11 h-6 rounded-full transition-colors ${
+          checked ? "bg-green-500" : "bg-gray-300"
+        }`}
+      >
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.checked)}
+          className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+          aria-label="פתח לקבלת הרשמות"
+        />
+        <span
+          className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all ${
+            checked ? "end-0.5" : "start-0.5"
+          }`}
+        />
+      </span>
+    </label>
+  );
+}
+
+/* ---------- Save indicator ---------- */
+
+function SaveIndicator({ state }: { state: SaveState }) {
+  if (state === "saving") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+        <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-pulse" />
+        שומר…
+      </span>
+    );
+  }
+  if (state === "saved") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-green-700">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+        נשמר
+      </span>
+    );
+  }
+  if (state === "error") {
+    return <span className="text-xs text-red-600">לא הצליח לשמור</span>;
+  }
+  if (state === "auth-expired") {
+    return <span className="text-xs text-amber-700">ההפעלה פגה</span>;
+  }
+  return null;
 }
