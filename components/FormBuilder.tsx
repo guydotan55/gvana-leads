@@ -164,6 +164,9 @@ export default function FormBuilder({ editingId }: BuilderProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, subtitle, fields, status: "published" }),
       });
+      if (res.status === 401) {
+        throw new Error("ההפעלה פגה — פתח/י את הדף ב‑/login בכרטיסייה חדשה, התחבר/י, ואז חזור/י לכאן ונסה/י שוב");
+      }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error || `HTTP ${res.status}`);
