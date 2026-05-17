@@ -52,7 +52,7 @@ export default function FieldBlockEditor({
             type="button"
             onClick={() => onMove(-1)}
             disabled={index === 0}
-            className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-30"
+            className="w-12 h-12 flex items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-30"
             aria-label="העלה"
           >
             ▲
@@ -61,7 +61,7 @@ export default function FieldBlockEditor({
             type="button"
             onClick={() => onMove(1)}
             disabled={index === total - 1}
-            className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-30"
+            className="w-12 h-12 flex items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-30"
             aria-label="הורד"
           >
             ▼
@@ -75,7 +75,7 @@ export default function FieldBlockEditor({
               value={field.label}
               onChange={(e) => onUpdate({ label: e.target.value })}
               placeholder="שם השאלה"
-              className="flex-1 min-w-0 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm font-medium focus:border-brand-sky focus:ring-2 focus:ring-brand-sky/20 outline-none min-h-[40px]"
+              className="flex-1 min-w-0 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm font-medium focus:border-brand-sky focus:ring-2 focus:ring-brand-sky/20 outline-none min-h-[48px]"
               aria-label="שם השאלה"
             />
             <span className="text-[11px] uppercase tracking-wider font-semibold text-gray-400 shrink-0 hidden sm:inline">
@@ -91,20 +91,20 @@ export default function FieldBlockEditor({
           )}
 
           <div className="flex items-center gap-3 flex-wrap">
-            <label className="flex items-center gap-1.5 text-sm text-gray-700 select-none cursor-pointer min-h-[24px]">
+            <label className="flex items-center gap-1.5 text-sm text-gray-700 select-none cursor-pointer min-h-[48px] px-2 -mx-2">
               <input
                 type="checkbox"
                 checked={field.required}
                 onChange={(e) => onUpdate({ required: e.target.checked })}
                 disabled={isLocked}
-                className="w-4 h-4 rounded"
+                className="w-5 h-5 rounded"
               />
               שאלת חובה
             </label>
             <button
               type="button"
               onClick={() => setShowAdvanced((v) => !v)}
-              className="text-xs font-semibold text-gray-500 hover:text-gray-800 inline-flex items-center gap-1 min-h-[24px]"
+              className="text-xs font-semibold text-gray-500 hover:text-gray-800 inline-flex items-center gap-1 min-h-[48px] px-2 -mx-2"
               aria-expanded={showAdvanced}
             >
               <span style={{ transform: showAdvanced ? "rotate(90deg)" : "rotate(0)", transition: "transform .15s" }}>▸</span>
@@ -121,7 +121,7 @@ export default function FieldBlockEditor({
                   value={field.placeholder || ""}
                   onChange={(e) => onUpdate({ placeholder: e.target.value })}
                   placeholder="לדוגמה: 050-0000000"
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm min-h-[40px]"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm min-h-[48px]"
                 />
               </div>
               <div>
@@ -156,7 +156,7 @@ export default function FieldBlockEditor({
           type="button"
           onClick={onRemove}
           disabled={isLocked}
-          className="w-8 h-8 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 shrink-0"
+          className="w-12 h-12 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 shrink-0"
           title={isLocked ? "שדה מוצמד — לא ניתן למחוק" : "מחק"}
           aria-label="מחק שאלה"
         >
@@ -194,14 +194,14 @@ function OptionsEditor({
             type="text"
             value={opt.label}
             onChange={(e) => update(i, { label: e.target.value, value: e.target.value })}
-            className="flex-1 px-2.5 py-1.5 bg-white border border-gray-200 rounded-md text-sm min-h-[36px]"
+            className="flex-1 px-2.5 py-1.5 bg-white border border-gray-200 rounded-md text-sm min-h-[48px]"
             placeholder={`אפשרות ${i + 1}`}
           />
           <button
             type="button"
             onClick={() => remove(i)}
             disabled={options.length <= 1}
-            className="w-7 h-7 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30"
+            className="w-12 h-12 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30"
             aria-label="מחק אפשרות"
           >
             ✕
@@ -211,7 +211,7 @@ function OptionsEditor({
       <button
         type="button"
         onClick={add}
-        className="text-xs font-semibold text-brand-sky hover:underline pt-0.5"
+        className="text-xs font-semibold text-brand-sky hover:underline min-h-[48px] inline-flex items-center px-2 -mx-2"
       >
         + הוסף אפשרות
       </button>

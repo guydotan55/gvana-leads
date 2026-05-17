@@ -35,7 +35,7 @@ export default function FieldTypePicker({
         <button
           type="button"
           onClick={onCancel}
-          className="w-7 h-7 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+          className="w-12 h-12 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100"
           aria-label="סגור"
         >
           ✕
@@ -60,7 +60,7 @@ export default function FieldTypePicker({
         <button
           type="button"
           onClick={() => setShowAll(true)}
-          className="w-full text-xs font-semibold text-brand-sky hover:underline py-1.5"
+          className="w-full text-xs font-semibold text-brand-sky hover:underline py-1.5 min-h-[48px] inline-flex items-center justify-center"
         >
           עוד אפשרויות…
         </button>
