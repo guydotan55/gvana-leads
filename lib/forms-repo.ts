@@ -205,19 +205,28 @@ export function slugVariants(s: string): string[] {
   return Array.from(out);
 }
 
-export async function getForm(id: string): Promise<FormDef | null> {
-  const all = await listForms();
+/**
+ * Pure matcher — find a form in a given list by id with NFC/NFD/percent-
+ * encoding tolerance. Exported so tests can exercise it without mocking
+ * the Sheets layer.
+ */
+export function findFormInList(list: FormDef[], id: string): FormDef | null {
   const toNFC = (v: string) => {
     try { return v.normalize("NFC"); } catch { return v; }
   };
   const wanted = new Set(slugVariants(id).map(toNFC));
-  for (const f of all) {
+  for (const f of list) {
     const candidates = slugVariants(f.id).map(toNFC);
     for (let i = 0; i < candidates.length; i += 1) {
       if (wanted.has(candidates[i])) return f;
     }
   }
   return null;
+}
+
+export async function getForm(id: string): Promise<FormDef | null> {
+  const all = await listForms();
+  return findFormInList(all, id);
 }
 
 /** Public for diagnostic 404 page. */
