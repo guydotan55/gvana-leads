@@ -43,10 +43,10 @@ export default function FieldBlockEditor({
   return (
     <li className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
       <div className="flex items-start gap-2 px-3 py-3">
-        {/* Drag handle / reorder */}
-        <div className="flex flex-col items-center pt-1" aria-hidden="true">
-          <span className="text-gray-300 cursor-grab select-none leading-none" title="גרור לסידור">⋮⋮</span>
-        </div>
+        {/* Reorder via ▲▼ buttons. Decorative drag-handle cue removed —
+            we don't wire HTML5 DnD because (a) it doesn't work on
+            touch which is half our audience, and (b) showing a handle
+            that does nothing trains the user that the UI is broken. */}
         <div className="flex flex-col gap-0.5">
           <button
             type="button"
