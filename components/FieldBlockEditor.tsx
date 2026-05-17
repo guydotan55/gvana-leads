@@ -17,8 +17,8 @@ const TYPE_LABELS: Record<FieldType, string> = {
 /**
  * Per-field editor. Always-visible: label, required toggle, (for
  * choice fields) options list, move/delete handles. Behind the
- * "אפשרויות מתקדמות" disclosure: help text, placeholder, validation
- * pattern, conditional-logic placeholder.
+ * "אפשרויות מתקדמות" disclosure: placeholder text, validation
+ * pattern (stored but not yet enforced — see the inline note).
  */
 export default function FieldBlockEditor({
   field,
@@ -137,12 +137,6 @@ export default function FieldBlockEditor({
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm font-mono min-h-[48px]"
                 />
                 <p className="text-[11px] text-gray-400 mt-1">תכונה זו תתווסף בקרוב — הערך יישמר כעת ולא יופעל.</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-600 mb-1">תנאים להצגת השדה</p>
-                <div className="rounded-md border border-dashed border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-500">
-                  תכונה זו תתווסף בקרוב — תוכלי להציג שאלה רק אם נבחרה תשובה מסוימת בשאלה קודמת.
-                </div>
               </div>
             </div>
           )}
