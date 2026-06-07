@@ -124,6 +124,8 @@ export async function POST(request: NextRequest) {
       "",              // W: attempts
       "",              // X: plan
       "",              // Y: handledBy
+      "",              // Z: comment (internal note)
+      utmMedium || "", // AA: utm_medium
     ];
 
     await sheets.spreadsheets.values.append({
