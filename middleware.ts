@@ -17,11 +17,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Static assets in /public are public by nature — let them through so
+  // they're fetchable without a session (e.g. a campaign image referenced
+  // as a WhatsApp image_url). Was .png/.ico only, which 401'd .jpg flyers.
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
-    pathname.endsWith(".png") ||
-    pathname.endsWith(".ico")
+    /\.(png|jpe?g|webp|gif|svg|ico)$/i.test(pathname)
   ) {
     return NextResponse.next();
   }
