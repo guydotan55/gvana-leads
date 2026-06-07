@@ -19,11 +19,14 @@ export async function middleware(request: NextRequest) {
 
   // Static assets in /public are public by nature — let them through so
   // they're fetchable without a session (e.g. a campaign image referenced
-  // as a WhatsApp image_url). Was .png/.ico only, which 401'd .jpg flyers.
+  // as a WhatsApp image_url). NEVER bypass /api/* on extension alone: a
+  // path like /api/forms/<id>.png would otherwise skip the auth gate and
+  // leak lead data.
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
-    /\.(png|jpe?g|webp|gif|svg|ico)$/i.test(pathname)
+    (!pathname.startsWith("/api/") &&
+      /\.(png|jpe?g|webp|gif|svg|ico)$/i.test(pathname))
   ) {
     return NextResponse.next();
   }
