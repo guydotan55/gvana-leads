@@ -26,7 +26,7 @@ describe("buildColumnMap", () => {
     const map = buildColumnMap(HEADER_TAB_WITHOUT_COMMENT);
     // utm_medium header is absent from intake tabs (same as comment) → must fall
     // back to fixed AA (index 26) so the value written at intake reads back.
-    expect(map.medium).toBe(columnsConfig.dashboardColumns.medium.index);
+    expect(map.medium).toBe(columnsConfig.intakeColumns.medium.index);
     expect(map.medium).toBe(26);
   });
 

@@ -90,6 +90,12 @@ export function buildColumnMap(headers: string[]): Record<string, number> {
     if (map[field] === undefined) map[field] = def.index;
   }
 
+  // Intake-only columns (e.g. utm_medium at AA) are written at intake but their
+  // header is absent from the intake tabs — same fixed-fallback rule as above.
+  for (const [field, def] of Object.entries(columnsConfig.intakeColumns)) {
+    if (map[field] === undefined) map[field] = def.index;
+  }
+
   return map;
 }
 
@@ -177,6 +183,7 @@ function rowToLeadDynamic(
 function buildFixedColumnMap(): Record<string, number> {
   const fb = columnsConfig.fbColumns;
   const db = columnsConfig.dashboardColumns;
+  const intake = columnsConfig.intakeColumns;
   return {
     leadId: fb.leadId.index,
     createdTime: fb.createdTime.index,
@@ -203,7 +210,7 @@ function buildFixedColumnMap(): Record<string, number> {
     plan: db.plan.index,
     handledBy: db.handledBy.index,
     comment: db.comment.index,
-    medium: db.medium.index,
+    medium: intake.medium.index,
   };
 }
 

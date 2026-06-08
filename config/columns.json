@@ -27,7 +27,9 @@
     "attempts":        { "index": 22, "letter": "W", "header": "ניסיונות" },
     "plan":            { "index": 23, "letter": "X", "header": "תוכנית" },
     "handledBy":       { "index": 24, "letter": "Y", "header": "טופל ע\"י" },
-    "comment":         { "index": 25, "letter": "Z", "header": "הערה פנימית" },
+    "comment":         { "index": 25, "letter": "Z", "header": "הערה פנימית" }
+  },
+  "intakeColumns": {
     "medium":          { "index": 26, "letter": "AA", "header": "utm_medium" }
   }
 }
