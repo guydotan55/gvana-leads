@@ -634,6 +634,8 @@ export async function appendSubmission(form: FormDef, input: SubmissionInput): P
     "",
     "",
     "",
+    "",                     // Z: comment (internal note)
+    input.utmMedium || "",  // AA: utm_medium
   ];
 
   await sheets.spreadsheets.values.append({

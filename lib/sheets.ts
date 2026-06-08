@@ -34,6 +34,8 @@ export interface Lead {
   plan: string;
   handledBy: string;
   comment: string;
+  // utm_medium captured at intake (e.g. "technology_list"); drives special-source filtering
+  medium: string;
 }
 
 /* ---------- Header alias map for dynamic column detection ---------- */
@@ -65,17 +67,35 @@ const HEADER_ALIASES: Record<string, string[]> = {
   plan: ["תוכנית"],
   handledBy: ["טופל ע\"י"],
   comment: ["הערה פנימית", "הערה_פנימית", "comment"],
+  medium: ["utm_medium"],
 };
 
 /** Known header names used to detect whether the first row is a header row */
 const KNOWN_HEADERS = ["id", "created_time", "ad_id", "form_id", "lead_status"];
 
-function buildColumnMap(headers: string[]): Record<string, number> {
+export function buildColumnMap(headers: string[]): Record<string, number> {
   const map: Record<string, number> = {};
   for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
     const idx = headers.findIndex((h) => aliases.includes(h));
     if (idx !== -1) map[field] = idx;
   }
+
+  // Dashboard columns live at fixed positions (writes always target the fixed
+  // letters in config/columns.json). Some header-based tabs — the organic tab
+  // and builder-created form tabs — omit certain dashboard headers (e.g. the
+  // "הערה פנימית" comment column at Z). Without a header match a value written
+  // there would never be read back, so fall back to the fixed index. This keeps
+  // read/write symmetric on every tab and recovers values already written.
+  for (const [field, def] of Object.entries(columnsConfig.dashboardColumns)) {
+    if (map[field] === undefined) map[field] = def.index;
+  }
+
+  // Intake-only columns (e.g. utm_medium at AA) are written at intake but their
+  // header is absent from the intake tabs — same fixed-fallback rule as above.
+  for (const [field, def] of Object.entries(columnsConfig.intakeColumns)) {
+    if (map[field] === undefined) map[field] = def.index;
+  }
+
   return map;
 }
 
@@ -155,6 +175,7 @@ function rowToLeadDynamic(
     plan: get("plan") || "",
     handledBy: get("handledBy") || "",
     comment: get("comment") || "",
+    medium: get("medium") || "",
   };
 }
 
@@ -162,6 +183,7 @@ function rowToLeadDynamic(
 function buildFixedColumnMap(): Record<string, number> {
   const fb = columnsConfig.fbColumns;
   const db = columnsConfig.dashboardColumns;
+  const intake = columnsConfig.intakeColumns;
   return {
     leadId: fb.leadId.index,
     createdTime: fb.createdTime.index,
@@ -188,6 +210,7 @@ function buildFixedColumnMap(): Record<string, number> {
     plan: db.plan.index,
     handledBy: db.handledBy.index,
     comment: db.comment.index,
+    medium: intake.medium.index,
   };
 }
 
@@ -214,7 +237,7 @@ export async function getLeads(): Promise<Lead[]> {
     const response = await withSheetsRetry(() =>
       sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `'${tabName}'!A1:Z`,
+        range: `'${tabName}'!A1:AA`,
       })
     );
 

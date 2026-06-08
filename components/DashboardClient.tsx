@@ -6,10 +6,16 @@ import LeadTable from "./LeadTable";
 import { t } from "@/lib/i18n";
 import type { Lead } from "@/lib/sheets";
 import { classifyLead, getLeadFilterKey } from "@/lib/lead-type";
+import { clientConfig } from "@/client.config";
 
 const POLL_INTERVAL = 30_000;
 
-function getLeadSource(lead: Lead): "facebook" | "organic" | "paid" | "website" {
+function getLeadSource(lead: Lead): string {
+  // Special sources (config-driven) take precedence: a matching utm_medium
+  // classifies the lead by its medium key regardless of platform.
+  const special = clientConfig.specialSources.find((s) => s.medium === lead.medium);
+  if (special) return special.medium;
+
   const p = (lead.platform || "").toLowerCase();
   const isFormLead = lead.leadId?.startsWith("org:");
   if (p === "organic") return "organic";
@@ -298,6 +304,9 @@ export default function DashboardClient() {
           <option value="paid">{t("leads.filter.paid")}</option>
           <option value="organic">{t("leads.filter.organic")}</option>
           <option value="website">{t("leads.filter.website")}</option>
+          {clientConfig.specialSources.map((s) => (
+            <option key={s.medium} value={s.medium}>{s.label}</option>
+          ))}
         </select>
       </div>
       <LeadTable
