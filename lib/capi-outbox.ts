@@ -33,19 +33,6 @@ export function isDue(row: OutboxRow, nowISO: string): boolean {
   return (row.nextAttemptAt || "") <= nowISO;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function tabExists(sheetTab: string): Promise<boolean> {
-  try {
-    const sheets = getSheets();
-    const meta = await withSheetsRetry(() =>
-      sheets.spreadsheets.get({ spreadsheetId: getSheetId() })
-    );
-    return (meta.data.sheets || []).some((s) => s.properties?.title === sheetTab);
-  } catch {
-    return false;
-  }
-}
-
 async function readAll(): Promise<OutboxRow[]> {
   try {
     const sheets = getSheets();
