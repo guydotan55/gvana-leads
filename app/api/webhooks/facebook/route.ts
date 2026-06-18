@@ -52,7 +52,9 @@ async function processLead(leadgenId: string, formId: string): Promise<void> {
   const formName = sourceName || (maps.find((m) => m.formId === formId)?.sourceName ?? sheetTab);
   const row = mapLeadToRow(lead, formName);
   if (!row[13] || !row[14]) {
-    await alert(`missing-field:${leadgenId}`, `Lead ${leadgenId} missing name or phone`, JSON.stringify(lead.field_data));
+    // Log only the field NAMES present — never the values (PII). Spec §8.
+    const presentFields = (lead.field_data || []).map((f) => f.name).join(", ");
+    await alert(`missing-field:${leadgenId}`, `Lead ${leadgenId} missing name or phone`, `fields present: ${presentFields}`);
   }
   await appendLead(sheetTab, row);
 
