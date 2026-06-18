@@ -33,6 +33,7 @@ interface CAPIEventParams {
   fbp?: string;
   sourceUrl?: string;
   customData?: Record<string, unknown>;
+  eventId?: string;
 }
 
 export async function sendCAPIEvent(params: CAPIEventParams): Promise<boolean> {
@@ -51,6 +52,10 @@ export async function sendCAPIEvent(params: CAPIEventParams): Promise<boolean> {
     action_source: "system_generated",
     user_data: userData,
   };
+
+  if (params.eventId) {
+    eventData.event_id = params.eventId;
+  }
 
   if (params.sourceUrl) {
     eventData.event_source_url = params.sourceUrl;
