@@ -81,7 +81,7 @@ function buildColumnMap(headers: string[]): Record<string, number> {
 
 /* ---------- Helpers ---------- */
 
-function getSheetId(): string {
+export function getSheetId(): string {
   const id = process.env.GOOGLE_SHEET_ID;
   if (!id) throw new Error("GOOGLE_SHEET_ID env var is required");
   return id;
@@ -100,7 +100,7 @@ function getAuth() {
   });
 }
 
-function getSheets(): sheets_v4.Sheets {
+export function getSheets(): sheets_v4.Sheets {
   return google.sheets({ version: "v4", auth: getAuth() });
 }
 
@@ -317,4 +317,73 @@ export async function deleteLead(sheetTab: string, row: number): Promise<void> {
       ],
     },
   });
+}
+
+export const HEADER_ROW: string[] = [
+  "id", "created_time", "ad_id", "ad_name", "adset_id", "adset_name",
+  "campaign_id", "campaign_name", "form_id", "form_name", "is_organic",
+  "platform", "interest", "full_name", "phone_number", "lead_status",
+  "", // Q gap
+  "סטטוס", "הודעה אחרונה", "תאריך הודעה", "מזהה הודעה", "הערות",
+  "ניסיונות", "תוכנית", "טופל ע\"י", "הערה פנימית",
+];
+
+export function normalizeLeadId(v: string): string {
+  return (v || "").startsWith("l:") ? v.slice(2) : (v || "");
+}
+
+export function rowsContainLeadId(rows: string[][], leadId: string): boolean {
+  const target = normalizeLeadId(leadId);
+  return rows.some((r) => normalizeLeadId(r[0] || "") === target);
+}
+
+export async function tabExists(sheetTab: string): Promise<boolean> {
+  const sheets = getSheets();
+  const meta = await withSheetsRetry(() => sheets.spreadsheets.get({ spreadsheetId: getSheetId() }));
+  return (meta.data.sheets || []).some((s) => s.properties?.title === sheetTab);
+}
+
+export async function ensureTabWithHeader(sheetTab: string, header: string[]): Promise<void> {
+  if (await tabExists(sheetTab)) return; // idempotent
+  const sheets = getSheets();
+  const spreadsheetId = getSheetId();
+  try {
+    await withSheetsRetry(() => sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests: [{ addSheet: { properties: { title: sheetTab } } }] },
+    }));
+  } catch (err) {
+    if (await tabExists(sheetTab)) return; // concurrent create
+    throw err;
+  }
+  await withSheetsRetry(() => sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${sheetTab}'!A1`,
+    valueInputOption: "RAW",
+    requestBody: { values: [header] },
+  }));
+}
+
+export async function ensureFormTab(sheetTab: string): Promise<void> {
+  await ensureTabWithHeader(sheetTab, HEADER_ROW);
+}
+
+export async function appendLead(sheetTab: string, row: string[]): Promise<void> {
+  const sheets = getSheets();
+  await withSheetsRetry(() => sheets.spreadsheets.values.append({
+    spreadsheetId: getSheetId(),
+    range: `'${sheetTab}'!A1`,
+    valueInputOption: "RAW",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: [row] },
+  }));
+}
+
+export async function leadExists(leadgenId: string, sheetTab: string): Promise<boolean> {
+  const sheets = getSheets();
+  const res = await withSheetsRetry(() => sheets.spreadsheets.values.get({
+    spreadsheetId: getSheetId(),
+    range: `'${sheetTab}'!A1:A`,
+  }));
+  return rowsContainLeadId((res.data.values as string[][]) || [], leadgenId);
 }
