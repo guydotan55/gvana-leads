@@ -75,3 +75,40 @@ export function sanitizeTabName(name: string, existing: string[]): string {
   }
   throw new Error(`sanitizeTabName: could not derive a unique tab name from "${name}"`);
 }
+
+const GRAPH = "https://graph.facebook.com/v21.0";
+
+export function getLeadsToken(): string {
+  const token = process.env.FB_PAGE_ACCESS_TOKEN || process.env.FB_ACCESS_TOKEN;
+  if (!token) throw new Error("Missing FB leads token (FB_PAGE_ACCESS_TOKEN/FB_ACCESS_TOKEN)");
+  return token;
+}
+
+const LEAD_FIELDS = [
+  "created_time", "field_data", "ad_id", "ad_name", "adset_id", "adset_name",
+  "campaign_id", "campaign_name", "form_id", "is_organic", "platform",
+].join(",");
+
+export async function fetchLead(leadgenId: string): Promise<GraphLead> {
+  const token = getLeadsToken();
+  const url = `${GRAPH}/${leadgenId}?fields=${LEAD_FIELDS}&access_token=${encodeURIComponent(token)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`leadgen fetch failed (${res.status}): ${text}`);
+  }
+  const data = (await res.json()) as GraphLead;
+  return { ...data, id: data.id || leadgenId };
+}
+
+export async function fetchFormName(formId: string): Promise<string> {
+  const token = getLeadsToken();
+  const url = `${GRAPH}/${formId}?fields=name&access_token=${encodeURIComponent(token)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`form name fetch failed (${res.status}): ${text}`);
+  }
+  const data = (await res.json()) as { name?: string };
+  return data.name || formId;
+}
