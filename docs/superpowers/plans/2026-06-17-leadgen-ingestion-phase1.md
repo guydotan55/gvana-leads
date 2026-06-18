@@ -18,6 +18,7 @@ Spec: `docs/superpowers/specs/2026-06-17-leadgen-ingestion-and-form-names-design
 - Phone normalization for CAPI MUST go through `lib/phone.ts` `normalizePhone()` (CLAUDE.md) — never hand-roll.
 - Sheet column layout is fixed in `config/columns.json` (FB cols A–P / indices 0–15; dashboard cols R–Z / 17–25; Q/16 is a gap).
 - Store ids/phone as **plain Graph values** (no synthetic `l:`/`p:` prefixes).
+- **DRY (shared sheet I/O):** every internal-tab module (`_form_labels`, `_capi_outbox`, `_errors`) MUST import `getSheets`, `getSheetId`, and `ensureTabWithHeader` from `lib/sheets.ts` (Task 5). Do **not** re-create the Google `JWT` auth/client or the create-tab-if-missing logic per module.
 - Tests: Jest, `__tests__/**/*.test.ts`, run with `npm test`. Imports use the `@/` alias. Tests for new code only.
 - Env (server-side, never logged): `FB_APP_SECRET`, `FB_WEBHOOK_VERIFY_TOKEN` (exists), `FB_ACCESS_TOKEN` (exists), optional `FB_PAGE_ACCESS_TOKEN`, `FB_PIXEL_ID` (exists), `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `CRON_SECRET` (exists), `GOOGLE_*` (exists).
 
@@ -443,11 +444,14 @@ git commit -m "feat(leadgen): Graph fetchLead + fetchFormName"
 - Test: `__tests__/sheets-leadexists.test.ts`
 
 **Interfaces:**
-- Produces:
+- Produces (shared, reused by Tasks 6/7/8/10 — do NOT re-create Google auth boilerplate elsewhere):
+  - `getSheets()` and `getSheetId()` — **change these existing private functions to `export`**
+  - `tabExists(sheetTab: string): Promise<boolean>`
+  - `ensureTabWithHeader(sheetTab: string, header: string[]): Promise<void>` — generic create-tab-if-missing + write header (idempotent, concurrency-safe)
   - `HEADER_ROW: string[]` (26 cols)
   - `normalizeLeadId(v: string): string`
   - `rowsContainLeadId(rows: string[][], leadId: string): boolean`
-  - `ensureFormTab(sheetTab: string): Promise<void>` — creates the tab + header if missing (idempotent)
+  - `ensureFormTab(sheetTab: string): Promise<void>` — thin wrapper: `ensureTabWithHeader(sheetTab, HEADER_ROW)`
   - `appendLead(sheetTab: string, row: string[]): Promise<void>`
   - `leadExists(leadgenId: string, sheetTab: string): Promise<boolean>`
 
@@ -497,13 +501,17 @@ export function rowsContainLeadId(rows: string[][], leadId: string): boolean {
   return rows.some((r) => normalizeLeadId(r[0] || "") === target);
 }
 
-async function tabExists(sheetTab: string): Promise<boolean> {
+// Also: change the existing private `getSheets` and `getSheetId` to `export function`
+// so Tasks 6/7/8 reuse them instead of re-creating Google auth boilerplate.
+
+export async function tabExists(sheetTab: string): Promise<boolean> {
   const sheets = getSheets();
   const meta = await withSheetsRetry(() => sheets.spreadsheets.get({ spreadsheetId: getSheetId() }));
   return (meta.data.sheets || []).some((s) => s.properties?.title === sheetTab);
 }
 
-export async function ensureFormTab(sheetTab: string): Promise<void> {
+// Generic, shared by every internal-tab module (_form_labels, _capi_outbox, _errors).
+export async function ensureTabWithHeader(sheetTab: string, header: string[]): Promise<void> {
   if (await tabExists(sheetTab)) return; // idempotent
   const sheets = getSheets();
   const spreadsheetId = getSheetId();
@@ -513,7 +521,7 @@ export async function ensureFormTab(sheetTab: string): Promise<void> {
       requestBody: { requests: [{ addSheet: { properties: { title: sheetTab } } }] },
     }));
   } catch (err) {
-    // A concurrent webhook may have created it between the check and the add.
+    // A concurrent request may have created it between the check and the add.
     if (await tabExists(sheetTab)) return;
     throw err;
   }
@@ -521,8 +529,12 @@ export async function ensureFormTab(sheetTab: string): Promise<void> {
     spreadsheetId,
     range: `'${sheetTab}'!A1`,
     valueInputOption: "RAW",
-    requestBody: { values: [HEADER_ROW] },
+    requestBody: { values: [header] },
   }));
+}
+
+export async function ensureFormTab(sheetTab: string): Promise<void> {
+  await ensureTabWithHeader(sheetTab, HEADER_ROW);
 }
 
 export async function appendLead(sheetTab: string, row: string[]): Promise<void> {
@@ -922,7 +934,7 @@ Expected: FAIL — module not found.
 - [ ] **Step 3: Implement `lib/alerts.ts`**
 
 ```ts
-import { google } from "googleapis";
+import { getSheets, getSheetId, ensureTabWithHeader } from "@/lib/sheets";
 import { withSheetsRetry } from "@/lib/sheets-retry";
 import { isFeatureEnabled } from "@/lib/config";
 
@@ -934,28 +946,10 @@ export function shouldSendAlert(recent: { key: string; ts: string }[], key: stri
   return !recent.some((r) => r.key === key && nowMs - Date.parse(r.ts) < windowMs);
 }
 
-function client() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const k = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  const auth = new google.auth.JWT({ email, key: k, scopes: ["https://www.googleapis.com/auth/spreadsheets"] });
-  return google.sheets({ version: "v4", auth });
-}
-const sid = () => process.env.GOOGLE_SHEET_ID as string;
-
-async function ensureTab(sheets: ReturnType<typeof client>): Promise<void> {
-  const meta = await withSheetsRetry(() => sheets.spreadsheets.get({ spreadsheetId: sid() }));
-  if ((meta.data.sheets || []).some((s) => s.properties?.title === TAB)) return;
-  await withSheetsRetry(() => sheets.spreadsheets.batchUpdate({
-    spreadsheetId: sid(), requestBody: { requests: [{ addSheet: { properties: { title: TAB } } }] },
-  }));
-  await withSheetsRetry(() => sheets.spreadsheets.values.update({
-    spreadsheetId: sid(), range: `'${TAB}'!A1`, valueInputOption: "RAW", requestBody: { values: [HEADER] },
-  }));
-}
-
-async function recentAlerts(sheets: ReturnType<typeof client>): Promise<{ key: string; ts: string }[]> {
+async function recentAlerts(): Promise<{ key: string; ts: string }[]> {
   try {
-    const res = await withSheetsRetry(() => sheets.spreadsheets.values.get({ spreadsheetId: sid(), range: `'${TAB}'!A2:C` }));
+    const sheets = getSheets();
+    const res = await withSheetsRetry(() => sheets.spreadsheets.values.get({ spreadsheetId: getSheetId(), range: `'${TAB}'!A2:C` }));
     return ((res.data.values as string[][]) || []).map((r) => ({ ts: r[0] || "", key: r[2] || "" }));
   } catch { return []; }
 }
@@ -973,27 +967,29 @@ async function sendTelegram(text: string): Promise<void> {
 
 export async function alert(key: string, message: string, context = ""): Promise<void> {
   try {
-    const sheets = client();
-    await ensureTab(sheets);
+    await ensureTabWithHeader(TAB, HEADER);
+    const sheets = getSheets();
     const ts = new Date().toISOString();
+
+    // Decide the Telegram send BEFORE appending, so the row we're about to
+    // write can't suppress its own alert.
+    const wantTelegram = isFeatureEnabled("alerts")
+      && shouldSendAlert(await recentAlerts(), key, Date.parse(ts), DEDUP_WINDOW_MS);
+
     // 1) always log to _errors
     await withSheetsRetry(() => sheets.spreadsheets.values.append({
-      spreadsheetId: sid(), range: `'${TAB}'!A1`, valueInputOption: "RAW",
+      spreadsheetId: getSheetId(), range: `'${TAB}'!A1`, valueInputOption: "RAW",
       insertDataOption: "INSERT_ROWS", requestBody: { values: [[ts, "leadgen", key, message, context]] },
     }));
-    // 2) telegram, gated + deduped
-    if (!isFeatureEnabled("alerts")) return;
-    const recent = await recentAlerts(sheets);
-    if (!shouldSendAlert(recent, key, Date.parse(ts), DEDUP_WINDOW_MS)) return;
-    await sendTelegram(`⚠️ ${message}${context ? `\n${context}` : ""}`);
+
+    // 2) telegram (decision computed above)
+    if (wantTelegram) await sendTelegram(`⚠️ ${message}${context ? `\n${context}` : ""}`);
   } catch (err) {
     // alerting must never break ingestion/cron
     console.error("alert() failed:", err);
   }
 }
 ```
-
-> Dedup reads `_errors` *after* appending the current row; the just-written row shares `ts === nowMs`, so `nowMs - ts = 0 < window` would suppress it. Guard by comparing strictly: the current row's own timestamp equals `nowMs`, and `0 < windowMs` is true, so it WOULD suppress. To avoid suppressing on the freshly-written row, read recent alerts BEFORE appending. **Implementation note:** move the `recentAlerts` read above the append, capture it, then append, then decide. Adjust Step 3 accordingly when implementing (read-then-append-then-decide).
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1140,7 +1136,7 @@ import {
   verifySignature, fetchLead, fetchFormName, mapLeadToRow, sanitizeTabName,
 } from "@/lib/leadgen";
 import {
-  ensureFormTab, appendLead, leadExists,
+  ensureFormTab, appendLead, leadExists, tabExists,
 } from "@/lib/sheets";
 import { getFormMappings, findTabByFormId, upsertFormMapping } from "@/lib/form-labels";
 import { upsertPending, markDone } from "@/lib/capi-outbox";
@@ -1150,12 +1146,6 @@ import { normalizePhone } from "@/lib/phone";
 
 export const dynamic = "force-dynamic";
 
-async function tabNames(): Promise<string[]> {
-  // reuse the store + a metadata read is overkill; resolve from existing mappings
-  const maps = await getFormMappings();
-  return maps.map((m) => m.sheetTab);
-}
-
 async function processLead(leadgenId: string, formId: string): Promise<void> {
   // 1. resolve target tab by form id
   const maps = await getFormMappings();
@@ -1164,7 +1154,7 @@ async function processLead(leadgenId: string, formId: string): Promise<void> {
 
   if (sheetTab) {
     // mapped but tab might have been deleted/renamed → fail loud
-    if (!(await leadExistsTabPresent(sheetTab))) {
+    if (!(await tabExists(sheetTab))) {
       await alert(`missing-tab:${sheetTab}`, `Mapped tab "${sheetTab}" is missing for form ${formId}`, `lead ${leadgenId}`);
       throw new Error(`mapped tab missing: ${sheetTab}`);
     }
@@ -1194,11 +1184,6 @@ async function processLead(leadgenId: string, formId: string): Promise<void> {
     const ok = await sendCAPIEvent({ eventName: "Lead", eventId: leadgenId, leadId: leadgenId, phone });
     if (ok) await markDone(leadgenId);
   }
-}
-
-// helper: does a tab currently exist? (cheap presence check)
-async function leadExistsTabPresent(sheetTab: string): Promise<boolean> {
-  try { await leadExists("__probe__", sheetTab); return true; } catch { return false; }
 }
 
 export async function POST(request: NextRequest) {
