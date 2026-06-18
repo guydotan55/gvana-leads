@@ -1,4 +1,5 @@
 import { createHmac } from "crypto";
+import columnsConfig from "@/config/columns.json";
 import {
   verifySignature, mapLeadToRow, extractName, extractPhone, sanitizeTabName,
 } from "@/lib/leadgen";
@@ -13,6 +14,8 @@ describe("verifySignature", () => {
   it("rejects a wrong/missing signature", () => {
     expect(verifySignature(body, "sha256=deadbeef", secret)).toBe(false);
     expect(verifySignature(body, null, secret)).toBe(false);
+    expect(verifySignature(body, "sha256=", secret)).toBe(false);      // empty hex
+    expect(verifySignature(body, "sha256=xyz", secret)).toBe(false);   // invalid hex
   });
 });
 
@@ -40,11 +43,12 @@ describe("mapLeadToRow", () => {
       ],
       form_id: "f1", platform: "ig", is_organic: false,
     }, "תוכנית משתמטים");
-    expect(row[0]).toBe("123");
-    expect(row[8]).toBe("f1");
-    expect(row[9]).toBe("תוכנית משתמטים");
-    expect(row[13]).toBe("Dana Levi");
-    expect(row[14]).toBe("+972501234567");
+    const fb = columnsConfig.fbColumns;
+    expect(row[fb.leadId.index]).toBe("123");
+    expect(row[fb.formId.index]).toBe("f1");
+    expect(row[fb.formName.index]).toBe("תוכנית משתמטים");
+    expect(row[fb.fullName.index]).toBe("Dana Levi");
+    expect(row[fb.phoneNumber.index]).toBe("+972501234567");
     expect(row.length).toBe(16);
   });
 });

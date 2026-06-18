@@ -16,6 +16,7 @@ export interface GraphLead {
 export function verifySignature(rawBody: string, header: string | null, appSecret: string): boolean {
   if (!header || !header.startsWith("sha256=")) return false;
   const theirs = header.slice("sha256=".length);
+  if (!/^[0-9a-f]{64}$/i.test(theirs)) return false;
   const ours = createHmac("sha256", appSecret).update(rawBody, "utf8").digest("hex");
   const a = Buffer.from(ours, "hex");
   const b = Buffer.from(theirs, "hex");
@@ -72,5 +73,5 @@ export function sanitizeTabName(name: string, existing: string[]): string {
     const candidate = `${base} ${i}`.slice(0, 90);
     if (!existing.includes(candidate)) return candidate;
   }
-  return base;
+  throw new Error(`sanitizeTabName: could not derive a unique tab name from "${name}"`);
 }
