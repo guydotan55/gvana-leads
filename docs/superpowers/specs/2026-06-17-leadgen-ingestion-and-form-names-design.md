@@ -225,11 +225,16 @@ duplicate. Idempotent: re-running changes nothing.
   non-legacy-tab → `custom` branch, so a per-form tab whose name contains
   a keyword would be auto-grouped into a core bucket instead of showing
   its own name. Decision: for non-legacy, non-`_` tabs, the **custom
-  branch wins first** (label = form name). This also changes existing
-  keyword tabs (e.g. "מדריכים למכינה הטכנולוגית") to show their own
-  names — confirmed desired. The legacy `לידים`/`אורגני` tabs keep the
-  keyword logic (they lump multiple forms).
-- **Resolve:** display label = `labelMap[sheetTab]` ?? `classifyLead(lead).label`.
+  branch wins first**, and its label is the **tab name (`sheetTab`)**, not
+  the per-row `form_name`. Keying the label off the tab keeps a tab's
+  leads unified even when individual rows carry different `form_name`
+  values (e.g. the backfilled קמפיין משתמטים tab, whose old rows say
+  "קמפיין משתמטים" and webhook rows would carry Meta's "תוכנית משתמטים").
+  This also changes existing keyword tabs (e.g. "מדריכים למכינה הטכנולוגית")
+  to show their own names — confirmed desired. The legacy `לידים`/`אורגני`
+  tabs keep the keyword logic (they lump multiple forms).
+- **Resolve:** display label = `labelMap[sheetTab]` ?? `classifyLead(lead).label`
+  (which, for custom tabs, is now the tab name).
   The override replaces only the **label string**; color/kind still come
   from `classifyLead`. With the reorder above, the no-override fallback is
   already the form's own name. **Apply the resolved label at both render
