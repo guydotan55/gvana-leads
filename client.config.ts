@@ -26,6 +26,7 @@ export interface ClientConfig {
     capi: boolean;
     multiSender: boolean;
     webhookFbLeads: boolean;
+    alerts: boolean;
   };
   integrations: {
     infobip: { enabled: boolean };
@@ -64,6 +65,7 @@ export const clientConfig: ClientConfig = {
     capi: true,
     multiSender: false,
     webhookFbLeads: true,
+    alerts: true,
   },
   integrations: {
     infobip: { enabled: true },
