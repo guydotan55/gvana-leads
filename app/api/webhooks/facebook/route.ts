@@ -83,21 +83,24 @@ export async function POST(request: NextRequest) {
   const changes: { leadgen_id: string; form_id: string }[] = [];
   for (const entry of payload.entry || []) {
     for (const ch of entry.changes || []) {
-      if (ch.field === "leadgen" && ch.value?.leadgen_id) {
+      if (ch.field === "leadgen" && ch.value?.leadgen_id && ch.value?.form_id) {
         changes.push({ leadgen_id: ch.value.leadgen_id, form_id: ch.value.form_id });
       }
     }
   }
 
-  try {
-    for (const c of changes) {
+  let failed = false;
+  for (const c of changes) {
+    try {
       await processLead(c.leadgen_id, c.form_id);
+    } catch (err) {
+      console.error("leadgen ingestion error:", err);
+      await alert(`ingest-error`, `Ingestion failed: ${(err as Error).message}`);
+      failed = true;
     }
-  } catch (err) {
-    console.error("leadgen ingestion error:", err);
-    await alert(`ingest-error`, `Ingestion failed: ${(err as Error).message}`);
+  }
+  if (failed) {
     return NextResponse.json({ error: "processing failed" }, { status: 500 });
   }
-
   return NextResponse.json({ success: true });
 }
