@@ -33,8 +33,14 @@ const CORE_LABELS: Record<CoreLeadType, string> = {
 export function classifyLead(lead: Lead): LeadTypeInfo {
   const name = lead.formName || "";
   const tab = lead.sheetTab || "";
-  const combined = name + tab;
 
+  // Per-form tabs win first: each form shows under its own (tab) name.
+  if (tab && !LEGACY_TABS.has(tab) && !tab.startsWith("_")) {
+    return { kind: "custom", label: tab };
+  }
+
+  // Legacy lumped tabs keep keyword classification.
+  const combined = name + tab;
   if (combined.includes("מדריך") || combined.includes("מדריכ")) {
     return { kind: "instructor", label: CORE_LABELS.instructor };
   }
@@ -45,14 +51,6 @@ export function classifyLead(lead: Lead): LeadTypeInfo {
   if (combined.includes("טכנולוגית") || rawAdsetId === TECH_ADSET_ID) {
     return { kind: "tech", label: CORE_LABELS.tech };
   }
-
-  // If the lead is in a tab that isn't one of the legacy tabs and isn't a
-  // known form keyword, treat it as a builder-created form and surface
-  // the form's own name as the label.
-  if (tab && !LEGACY_TABS.has(tab) && !tab.startsWith("_")) {
-    return { kind: "custom", label: name || tab };
-  }
-
   return { kind: "student", label: CORE_LABELS.student };
 }
 
