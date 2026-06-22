@@ -22,6 +22,14 @@ describe("buildColumnMap", () => {
     expect(map.comment).toBe(25);
   });
 
+  it("maps the medium column to its fixed index even when the header is missing", () => {
+    const map = buildColumnMap(HEADER_TAB_WITHOUT_COMMENT);
+    // utm_medium header is absent from intake tabs (same as comment) → must fall
+    // back to fixed AA (index 26) so the value written at intake reads back.
+    expect(map.medium).toBe(columnsConfig.intakeColumns.medium.index);
+    expect(map.medium).toBe(26);
+  });
+
   it("still detects headers that are present (no regression for status/notes)", () => {
     const map = buildColumnMap(HEADER_TAB_WITHOUT_COMMENT);
     expect(map.status).toBe(17); // R

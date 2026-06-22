@@ -28,6 +28,9 @@ export interface ClientConfig {
     webhookFbLeads: boolean;
     alerts: boolean;
   };
+  // Lead sources identified by their utm_medium at intake. Each becomes a
+  // top-level option in the dashboard source filter.
+  specialSources: Array<{ medium: string; label: string }>;
   integrations: {
     infobip: { enabled: boolean };
     capi: { enabled: boolean };
@@ -67,6 +70,9 @@ export const clientConfig: ClientConfig = {
     webhookFbLeads: true,
     alerts: true,
   },
+  specialSources: [
+    { medium: "technology_list", label: "רשימת תפוצה מיוחדת – טכנולוגי" },
+  ],
   integrations: {
     infobip: { enabled: true },
     capi: { enabled: true },
