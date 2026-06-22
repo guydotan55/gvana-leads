@@ -31,6 +31,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# fb leadgen page token (local only — paste into Vercel, then delete)
+fb-page-token.txt
+
 # superpowers / playwright temp files
 .superpowers/
 .playwright-mcp/
