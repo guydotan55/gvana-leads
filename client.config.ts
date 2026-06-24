@@ -28,6 +28,11 @@ export interface ClientConfig {
     webhookFbLeads: boolean;
     alerts: boolean;
   };
+  // CAPI event names per stage. `qualified` MUST equal the event mapped to the
+  // "qualified" lead stage in Events Manager (Conversion-Leads) for the
+  // QUALITY_LEAD ad set to optimize on our signal. `lead` documents the inbound
+  // event Phase 1 already sends (not re-wired here).
+  capiEvents: { lead: string; qualified: string; accepted: string };
   // Lead sources identified by their utm_medium at intake. Each becomes a
   // top-level option in the dashboard source filter.
   specialSources: Array<{ medium: string; label: string }>;
@@ -70,6 +75,7 @@ export const clientConfig: ClientConfig = {
     webhookFbLeads: true,
     alerts: true,
   },
+  capiEvents: { lead: "Lead", qualified: "CompleteRegistration", accepted: "Purchase" },
   specialSources: [
     { medium: "technology_list", label: "רשימת תפוצה מיוחדת – טכנולוגי" },
   ],
