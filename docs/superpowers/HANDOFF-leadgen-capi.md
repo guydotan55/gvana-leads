@@ -66,9 +66,15 @@ do NOT `git stash`, stay on `main`, commit to `main`."**
   ("לידים כללי 2026", CAPI `pending`); cleared 9 fake-`444` `_errors` rows.
 
 ## OUTSTANDING — user actions (Meta side)
-- **(c) Turn off Zapier — TIME-SENSITIVE** (Zapier + webhook both ingest → cross-tab
-  dupes). business.facebook.com/settings → Integrations → Leads Access → מכינת גוונא
-  Page → remove **Zapier**. (Or toggle the Zap off.)
+- **(c) Remove duplicate lead sources — TIME-SENSITIVE** (multiple sources ingest →
+  cross-tab dupes). User now has FULL ACCESS to **מכינות מחיר** (the page's owner),
+  so manage from there: switch business portfolio → **מכינות מחיר** → Integrations →
+  Leads Access → **מכינת גוונא** Page → **CRMs** tab. Three CRMs have access:
+  **Gavna_Leads (KEEP — our app), Zapier (REMOVE), Google Sheets (REMOVE)**. Do
+  Zapier first, give the webhook ~a day to confirm it catches real leads, then
+  remove Google Sheets → our app is the single source. (Do NOT move the page to
+  המכינה — IG-connection-blocked and unnecessary; the webhook uses a page-admin
+  token regardless of owner.)
 - Confirm `FB_PIXEL_ID` in Vercel = **`775454794700271`** ("שנת שירות").
 - For `QUALITY_LEAD` optimization to actually use our signal: in Events Manager →
   "שנת שירות" → Conversion-Leads lead-stage setup, **map `capiEvents.qualified`
@@ -121,5 +127,9 @@ do NOT `git stash`, stay on `main`, commit to `main`."**
 > tasks are pre-listed in the handoff's "Planned files" section), then run an
 > adversarial review of the plan, then build it subagent-driven on main, then an
 > adversarial review of the branch. Also remind me about the still-open user
-> actions: turn off Zapier (time-sensitive), confirm FB_PIXEL_ID=775454794700271,
-> and set up the Conversion-Leads lead-stage mapping in Events Manager.
+> actions: (1) in מכינות מחיר → Leads Access → CRMs, remove **Zapier** then (after a
+> day) **Google Sheets**, keep **Gavna_Leads** (kills duplicate lead sources — I
+> have full access to מחיר now; do NOT move the page); (2) confirm
+> FB_PIXEL_ID=775454794700271 in Vercel; (3) set up the Conversion-Leads lead-stage
+> mapping in Events Manager (Leads Center: Intake→Qualified→Converted) so the
+> qualified CAPI event actually optimizes the QUALITY_LEAD ad set.
