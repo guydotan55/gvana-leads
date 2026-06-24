@@ -34,6 +34,7 @@ interface CAPIEventParams {
   sourceUrl?: string;
   customData?: Record<string, unknown>;
   eventId?: string;
+  eventTime?: number;
 }
 
 export async function sendCAPIEvent(params: CAPIEventParams): Promise<boolean> {
@@ -48,7 +49,7 @@ export async function sendCAPIEvent(params: CAPIEventParams): Promise<boolean> {
 
   const eventData: Record<string, unknown> = {
     event_name: params.eventName,
-    event_time: Math.floor(Date.now() / 1000),
+    event_time: params.eventTime ?? Math.floor(Date.now() / 1000),
     action_source: "system_generated",
     user_data: userData,
   };
