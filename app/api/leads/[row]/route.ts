@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLeads, updateLeadCells, deleteLead, VALID_STATUSES } from "@/lib/sheets";
 import { sendCAPIEvent } from "@/lib/capi";
+import { isFeatureEnabled } from "@/lib/config";
+import { normalizePhone } from "@/lib/phone";
+import { clientConfig } from "@/client.config";
+import { alert } from "@/lib/alerts";
+import {
+  resolveConversion,
+  upsertPending as upsertConvPending,
+  markDone as markConvDone,
+} from "@/lib/capi-conversions";
 
 export async function PATCH(
   request: NextRequest,
@@ -49,29 +58,56 @@ export async function PATCH(
 
     await updateLeadCells(lead.sheetTab, rowNum, updates);
 
-    // Fire CAPI events on meaningful status changes
-    if ((status === "relevant" || status === "not_relevant_target") && lead.phone) {
-      sendCAPIEvent({
-        eventName: "CompleteRegistration",
-        phone: lead.phone,
-        leadId: lead.leadId,
-        customData: {
-          content_name: status === "relevant" ? "lead_relevant" : "lead_not_relevant_target",
-          campaign_name: lead.campaignName || undefined,
-        },
-      }).catch((err) => console.error("CAPI CompleteRegistration event failed:", err));
-    }
-
-    if (status === "accepted" && lead.phone) {
-      sendCAPIEvent({
-        eventName: "Purchase",
-        phone: lead.phone,
-        leadId: lead.leadId,
-        customData: {
-          content_name: "lead_accepted",
-          campaign_name: lead.campaignName || undefined,
-        },
-      }).catch((err) => console.error("CAPI Purchase event failed:", err));
+    // Fire qualified/accepted CAPI conversions — guaranteed (outbox + retry),
+    // correct (normalized phone, event_id, preserved event_time), config-driven.
+    // Gate is `lead.leadId` (the Meta lead_id match key), NOT phone as before:
+    // organic/manual leads have no lead_id → unattributable → skipped. A lead may
+    // have a leadId but no phone; we still fire (lead_id alone attributes), passing
+    // phone only when present. A CAPI hiccup must NEVER fail the status update —
+    // the admin action is primary; we log + alert instead.
+    if (isFeatureEnabled("capi") && lead.leadId) {
+      const resolved = resolveConversion(
+        status,
+        lead,
+        clientConfig.capiEvents,
+        Math.floor(Date.now() / 1000)
+      );
+      if (resolved) {
+        try {
+          const payloadJson = JSON.stringify(resolved.customData);
+          // `armed` is false when an existing pending/done row is left untouched —
+          // a same-stage re-mark is a deduped no-op, so we do NOT re-send inline
+          // (this is what keeps the inline path and the cron-retry path in sync).
+          const armed = await upsertConvPending(
+            lead.leadId,
+            resolved.eventName,
+            lead.sheetTab,
+            resolved.eventTime,
+            payloadJson
+          );
+          if (armed) {
+            const ok = await sendCAPIEvent({
+              eventName: resolved.eventName,
+              eventId: lead.leadId,
+              leadId: lead.leadId,
+              phone: lead.phone ? normalizePhone(lead.phone) : undefined,
+              customData: resolved.customData,
+              eventTime: resolved.eventTime,
+            });
+            // Inline-send failure leaves the row `pending` → daily cron retries.
+            if (ok) await markConvDone(lead.leadId, resolved.eventName);
+          }
+        } catch (err) {
+          // Persistent sheet outage: no row to retry. Alerted, not auto-recovered.
+          // (alert() never throws — it swallows internally — so no inner catch.)
+          console.error("CAPI conversion enqueue/send failed:", err);
+          await alert(
+            `capi-conv-enqueue:${lead.leadId}:${resolved.eventName}`,
+            `CAPI conversion failed to enqueue/send for lead ${lead.leadId} (status ${status})`,
+            String(err)
+          );
+        }
+      }
     }
 
     return NextResponse.json({ success: true });
