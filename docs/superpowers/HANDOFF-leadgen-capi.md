@@ -17,12 +17,24 @@ do NOT `git stash`, stay on `main`, commit to `main`."**
 - The webhook is **page-wide** (every form on the page), gated by
   `features.webhookFbLeads`.
 
-### Phase 2 — Qualified-conversion CAPI hardening: spec ✅ committed (`f6347d4`), PLAN NOT WRITTEN YET
+### Phase 2 — Qualified-conversion CAPI hardening: ✅ BUILT + REVIEWED on main (2026-06-25), NOT YET DEPLOYED
 - Spec `docs/superpowers/specs/2026-06-24-qualified-conversion-capi-design.md`
   (converged through 2 adversarial passes; SHIP-IT).
-- **IMMEDIATE NEXT STEP: write the implementation plan** (`writing-plans` skill)
-  → adversarial-review the plan → build (subagent-driven, on main) →
-  adversarial-review the branch. I was about to write the plan when context ran out.
+- Plan `docs/superpowers/plans/2026-06-24-qualified-conversion-capi.md` (`3e04625`);
+  written via writing-plans, **2 adversarial passes → SHIP-IT** (pass 1 caught the
+  inline-vs-cron re-mark disagreement; fixed via `upsertPending` returning `armed`).
+- **Built subagent-driven on main, 6 commits `786320a..0843b62`** — each task
+  spec+quality reviewed clean. **Final whole-branch adversarial review (opus): SHIP IT
+  AS IS**, 0 findings. Gates: tsc clean, lint clean (2 pre-existing unrelated `<img>`
+  warnings), 41/41 tests, Phase-1 (`_capi_outbox`, webhooks) untouched. NOTE: `next
+  build`'s webpack step HANGS in this env (pre-existing/environmental, not the diff) —
+  gated via tsc+lint+jest instead.
+- **REMAINING = nothing code-side.** Next: (1) the Meta-side user actions below
+  (pixel-id confirm + lead-stage mapping — until the mapping exists, events are
+  received/attributed but DON'T optimize `QUALITY_LEAD`); (2) deploy preview + run the
+  manual-verification steps in the plan (mark a test lead `relevant` → row in
+  `_capi_conversions_outbox` flips `pending`→`done`; re-mark dedup no-op; failed→re-arm;
+  no-phone lead; Phase-1 inbound Lead still works).
 - Design (final): a SEPARATE `_capi_conversions_outbox` keyed by
   `(leadgenId, eventName)` — Phase 1's `_capi_outbox` stays untouched. Trigger
   (already the code's logic): `relevant`|`not_relevant_target` → `capiEvents.qualified`;
@@ -66,15 +78,13 @@ do NOT `git stash`, stay on `main`, commit to `main`."**
   ("לידים כללי 2026", CAPI `pending`); cleared 9 fake-`444` `_errors` rows.
 
 ## OUTSTANDING — user actions (Meta side)
-- **(c) Remove duplicate lead sources — TIME-SENSITIVE** (multiple sources ingest →
-  cross-tab dupes). User now has FULL ACCESS to **מכינות מחיר** (the page's owner),
-  so manage from there: switch business portfolio → **מכינות מחיר** → Integrations →
-  Leads Access → **מכינת גוונא** Page → **CRMs** tab. Three CRMs have access:
-  **Gavna_Leads (KEEP — our app), Zapier (REMOVE), Google Sheets (REMOVE)**. Do
-  Zapier first, give the webhook ~a day to confirm it catches real leads, then
-  remove Google Sheets → our app is the single source. (Do NOT move the page to
-  המכינה — IG-connection-blocked and unnecessary; the webhook uses a page-admin
-  token regardless of owner.)
+- **(c) Remove duplicate lead sources: ✅ DONE (2026-06-25).** In מכינות מחיר →
+  Leads Access → מכינת גוונא Page → CRMs, **both Zapier AND Google Sheets were
+  removed in one go; only `Gavna_Leads` (our app/webhook) remains** → single source of
+  truth, cross-tab dupes killed. (User pulled both at once rather than the staged
+  Zapier-then-wait-a-day plan — fine since the webhook is live + verified, but there's
+  now NO fallback, so watch the dashboard for a day or two that real leads keep landing
+  via the webhook; re-add Google Sheets from that same CRMs tab if anything looks off.)
 - Confirm `FB_PIXEL_ID` in Vercel = **`775454794700271`** ("שנת שירות").
 - For `QUALITY_LEAD` optimization to actually use our signal: in Events Manager →
   "שנת שירות" → Conversion-Leads lead-stage setup, **map `capiEvents.qualified`
@@ -121,15 +131,18 @@ do NOT `git stash`, stay on `main`, commit to `main`."**
 > Resume the Mechinat Gvana leads project (on `main`, no worktree — subagents must
 > NOT create worktrees/branches or `git stash`). Read
 > `docs/superpowers/HANDOFF-leadgen-capi.md` first. Phase 1 (leadgen webhook) is
-> live. Now execute Phase 2 (qualified-conversion CAPI): spec is committed at
-> `docs/superpowers/specs/2026-06-24-qualified-conversion-capi-design.md`. Next
-> step is to WRITE THE IMPLEMENTATION PLAN with the writing-plans skill (files +
-> tasks are pre-listed in the handoff's "Planned files" section), then run an
-> adversarial review of the plan, then build it subagent-driven on main, then an
-> adversarial review of the branch. Also remind me about the still-open user
-> actions: (1) in מכינות מחיר → Leads Access → CRMs, remove **Zapier** then (after a
-> day) **Google Sheets**, keep **Gavna_Leads** (kills duplicate lead sources — I
-> have full access to מחיר now; do NOT move the page); (2) confirm
+> live; **Phase 2 (qualified-conversion CAPI) is BUILT + fully reviewed on main
+> (commits `786320a..0843b62`, final whole-branch review SHIP-IT) but NOT deployed.**
+> Next: deploy a preview and run the manual-verification steps from the plan
+> (`docs/superpowers/plans/2026-06-24-qualified-conversion-capi.md` → "Manual
+> verification" section): mark a test lead `relevant` → confirm a row in
+> `_capi_conversions_outbox` flips `pending`→`done` and the event shows in Events
+> Manager (test code) tied to `lead_id`; check re-mark dedup, failed→re-arm, no-phone
+> lead, and that the Phase-1 inbound `Lead` still works. Then remind me of the
+> still-open MY-side actions: (1) CRM cleanup is DONE (only Gavna_Leads left — just
+> watch the webhook catches real leads for a day, no fallback now); (2) confirm
 > FB_PIXEL_ID=775454794700271 in Vercel; (3) set up the Conversion-Leads lead-stage
-> mapping in Events Manager (Leads Center: Intake→Qualified→Converted) so the
-> qualified CAPI event actually optimizes the QUALITY_LEAD ad set.
+> mapping in Events Manager (Leads Center: Intake→Qualified→Converted), mapping
+> `capiEvents.qualified` (CompleteRegistration) → the "qualified" stage, so the event
+> actually optimizes the QUALITY_LEAD ad set. Until (3) exists, events are received +
+> attributed by lead_id but DON'T optimize.
