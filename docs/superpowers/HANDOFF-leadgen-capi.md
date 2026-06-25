@@ -101,6 +101,13 @@ do NOT `git stash`, stay on `main`, commit to `main`."**
   Out of scope; later (likely → `Contact`).
 - Untracked HTML mockups in repo root (leadgen-flow.html, form-name-edit-options.html,
   meta-pixels-breakdown.html, etc.) — discussion artifacts; keep or delete (user's call).
+- **Phase 2 cold-audit residual (deferred, pilot-acceptable):** `_capi_conversions_outbox`
+  `writeRow` addresses rows by `idx+2` (filtered-array index ↔ physical sheet row).
+  If a row is MANUALLY deleted from that internal `_`-tab between a cron `readAll` and a
+  same-cycle `mark*`, a later `update` can hit the wrong row. Inherited from Phase-1's
+  `_capi_outbox`; low odds (internal tab, team works the lead tabs). Proper fix = address
+  by re-found physical row, not array index. (The other cold-audit residual — the
+  two-pendings-no-done double-send — was CLOSED in `b936335` via per-key collapse in `dueRows`.)
 
 ## Key code facts
 - `lib/capi.ts`: `CAPIEventParams {eventName,phone,leadId,fbc,fbp,sourceUrl,customData,eventId}`;
