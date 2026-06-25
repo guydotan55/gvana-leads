@@ -1,56 +1,67 @@
-# Phase 2 (qualified-conversion CAPI) — Guy's deploy + verify checklist
+# Phase 2 (qualified-conversion CAPI) — deploy + verify checklist
 
-Code is DONE on local `main` (commits `3e04625..HEAD`, 51/51 tests, 3 adversarial
-passes incl. a cold audit → SHIP-IT). **Nothing is deployed yet** — these are the
-human/Meta-side steps that turn "built" into "working."
+Code is DONE on `main` (3 adversarial passes incl. a cold audit → SHIP-IT, 51/51).
+**Deployed to production 2026-06-25** (commit `9f9b1a7`). Remaining = Meta-side.
 
-## A. Deploy (unblocks everything else)
-- [ ] **Push `main`** — 15 local commits incl. all of Phase 2. `git push origin main`
-      → Vercel auto-deploys from GitHub `guydotan55/gvana-leads`. (Want a preview
-      first instead of straight-to-prod? The change is additive + Phase-1-isolated,
-      so prod is low-risk — but a preview lets you run the test below without
-      touching real attribution. Either works.)
-- [ ] **Confirm the Vercel build is green** (watch the build log). NOTE: `next build`
-      hangs on *this local machine* (a local webpack/SWC quirk) — Vercel's build env
-      is unaffected, but glance at the log to be sure.
-- [ ] **Confirm both crons are registered** in the Vercel dashboard:
-      `/api/cron/triggers` and `/api/cron/capi-retry` (daily `0 1 * * *`).
+## 🔑 CRITICAL FINDING (from inspecting the live Meta dataset)
+Over the last 28 days, dataset **"שנת שירות" (`775454794700271`)** received:
+- `Lead` ×76 (Phase-1 inbound — good), `PageView` ×2082, `ViewContent` ×69
+- **`lead_status` ×12** (last 2026-06-23) — Meta's canonical CRM lead-stage event
+- **`CompleteRegistration` ×0, `Purchase` ×0** — our qualified/accepted events have
+  NEVER fired (Phase 2 wasn't deployed until today)
+
+**What this means:** the `QUALITY_LEAD` ad set has been learning from `lead_status`
+lead-stage events — almost certainly fed by the **Google-Sheets / Zapier CRM
+connections you just removed** (Meta's Sheets "track leads" integration emits
+`lead_status`). We replaced ingestion with the webhook and now send
+`CompleteRegistration`/`Purchase` for qualification — **different event names.**
+So the old qualified-signal source is GONE and the new one uses different events.
+The Events-Manager mapping MUST be reconciled or QUALITY_LEAD optimizes on nothing.
+(There is NO custom conversion on the dataset → it's the native Conversion-Leads
+funnel, configured in Events Manager UI, not via API.)
+
+## A. Deploy — ✅ DONE (by Claude)
+- [x] **Pushed `main`** (15 commits) → production deploy `dpl_GbuhAsQn6SAhJrhchjNzTZJjuS8t`.
+- [x] **Build green** on Vercel, state READY → live at `gvana-leads-dashboard.vercel.app`.
+      (The `next build` hang was Claude's local machine only — Vercel built fine.)
+- [ ] **Glance at Vercel → Settings → Cron Jobs** to confirm `/api/cron/capi-retry`
+      + `/api/cron/triggers` are registered (couldn't read this via API).
 
 ## B. Config + Meta setup
-- [ ] **Confirm `FB_PIXEL_ID = 775454794700271`** ("שנת שירות") in Vercel env vars.
-- [ ] **Events Manager → "שנת שירות" → Conversion-Leads / lead funnel:** map
-      `CompleteRegistration` → the **"qualified"** stage, and `Purchase` → the
-      converted stage. *Until this exists, events are received but DON'T optimize
-      `QUALITY_LEAD`.*
+- [~] **`FB_PIXEL_ID`** — dataset `775454794700271` confirmed = "שנת שירות", active,
+      and already receives our **server (CAPI) events** (`server_last_fired` 2026-06-23),
+      so the env var is almost certainly correct. 5-sec confirm in Vercel env if you want.
+- [ ] **THE LINCHPIN — Conversion-Leads stage mapping** (Events Manager → "שנת שירות"
+      → Leads / Conversion-Leads settings). Check what event the **"qualified"** stage
+      keys on, then EITHER:
+      - **(preferred)** map `CompleteRegistration` → "qualified" and `Purchase` →
+        converted, so our events feed the funnel; OR
+      - if the funnel only accepts `lead_status` (the event it's been getting), tell me
+        and I'll switch `client.config.ts` `capiEvents.qualified`/`accepted` to match
+        (a one-line config change + redeploy — possibly + a stage value in the payload).
+      *Until this matches, our events are received + attributed by `lead_id` but DON'T
+      optimize `QUALITY_LEAD`.*
 
-## C. Verify it actually works (the crux the cold audit flagged)
-- [ ] *(safe mode, recommended)* Set `FB_TEST_EVENT_CODE` in Vercel so test events
-      go to **Events Manager → Test Events** and don't pollute real attribution.
+## C. Verify it actually works (the real proof)
+- [ ] *(safe)* Set `FB_TEST_EVENT_CODE` in Vercel so test events hit **Test Events**,
+      not real attribution.
 - [ ] In the dashboard, **mark a test lead `relevant`.**
-- [ ] In the Google Sheet, confirm a row appears in **`_capi_conversions_outbox`**
-      with `eventName = CompleteRegistration`, and that `status` flips
-      `pending` → `done`.
-- [ ] In **Events Manager**, confirm the `CompleteRegistration` event arrived:
-      tied to **`lead_id`**, carrying `lead_event_source = "Gavna_Leads"` +
-      `event_source = "crm"` in custom_data — **AND that it registers as a
-      "qualified" lead-stage transition, not just "received."** ← this is the one
-      thing that proves the QUALITY_LEAD optimization will actually use our signal.
-      If it's received but NOT recognized as a stage transition, ping me — the CRM
-      payload fields are config-driven and we can adjust them.
-- [ ] *(optional)* Mark a lead `accepted` → confirm a second row `Purchase`.
-- [ ] Remove `FB_TEST_EVENT_CODE` when verification is done.
+- [ ] In the Sheet, confirm a row appears in **`_capi_conversions_outbox`**
+      (`eventName = CompleteRegistration`) and flips `pending` → `done`.
+- [ ] In **Events Manager → Test Events**, confirm `CompleteRegistration` arrived tied
+      to **`lead_id`** with `lead_event_source = "Gavna_Leads"` + `event_source = "crm"`
+      — **and that the Conversion-Leads funnel registers it as a "qualified" stage
+      transition** (this is the real proof; ties back to B's linchpin).
+- [ ] *(optional)* mark a lead `accepted` → second row `Purchase`.
+- [ ] Remove `FB_TEST_EVENT_CODE` when done.
 
 ## D. Monitor + regression
-- [ ] **For a day or two, confirm real leads keep landing via the webhook** — CRM
-      cleanup removed Zapier + Google Sheets, so there's **no fallback** now.
-- [ ] **Confirm Phase-1 inbound `Lead` still works** — send a test FB lead, confirm
-      it enqueues in `_capi_outbox` and flips to `done` (regression check).
+- [ ] **Watch the webhook a day or two** — CRM cleanup removed the fallback.
+- [ ] **Confirm Phase-1 inbound `Lead` still works** (send a test FB lead → `_capi_outbox`).
 
-## E. Housekeeping (optional)
-- [ ] Decide on the untracked HTML mockups in the repo root
-      (`leadgen-flow.html`, `meta-pixels-breakdown.html`, etc.) — keep or delete.
+## E. Optional
+- [ ] Keep or delete the untracked HTML mockups in the repo root.
 
 ---
-*Deferred code follow-ups (pilot-acceptable, in HANDOFF "Open issues"): `idx+2`
-row-addressing fragility on manual row-deletion; dormant-duplicate-row clutter.
-Neither blocks deploy.*
+*Deferred code follow-ups (pilot-acceptable, in HANDOFF): `idx+2` addressing
+fragility on manual row-deletion; dormant-duplicate-row clutter. Neither blocks.*
