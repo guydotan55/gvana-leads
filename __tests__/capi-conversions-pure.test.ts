@@ -5,6 +5,7 @@ import {
   keyOf,
   shouldArm,
   dueRows,
+  crmFields,
   MAX_ATTEMPTS,
   type ConvRow,
 } from "@/lib/capi-conversions";
@@ -77,6 +78,19 @@ describe("shouldArm", () => {
   it("existing pending or done row → do not arm (deduped no-op)", () => {
     expect(shouldArm({ ...base, status: "pending" })).toBe(false);
     expect(shouldArm({ ...base, status: "done" })).toBe(false);
+  });
+});
+
+describe("crmFields", () => {
+  it("returns event_source + lead_event_source when set", () => {
+    expect(crmFields({ eventSource: "crm", leadEventSource: "Gavna_Leads" })).toEqual({
+      event_source: "crm",
+      lead_event_source: "Gavna_Leads",
+    });
+  });
+  it("omits empty values (multi-client: a client may disable crm tagging)", () => {
+    expect(crmFields({ eventSource: "", leadEventSource: "" })).toEqual({});
+    expect(crmFields({ eventSource: "crm", leadEventSource: "" })).toEqual({ event_source: "crm" });
   });
 });
 

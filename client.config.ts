@@ -28,10 +28,11 @@ export interface ClientConfig {
     webhookFbLeads: boolean;
     alerts: boolean;
   };
-  // CAPI event names per stage. `qualified` MUST equal the event mapped to the
-  // "qualified" lead stage in Events Manager (Conversion-Leads) for the
-  // QUALITY_LEAD ad set to optimize on our signal. `lead` documents the inbound
-  // event Phase 1 already sends (not re-wired here).
+  // CAPI event names per Meta CRM Conversion-Leads funnel stage. Meta REQUIRES
+  // these exact stage names for QUALITY_LEAD to optimize: `initial_lead` (lead
+  // arrives) + `qualified_lead` (admin marks relevant). `accepted` → a deeper
+  // converted stage (bonus). All three are sent as CRM events (see capiCrm) tied
+  // by lead_id so Meta stitches the funnel; lead coverage must reach 60%.
   capiEvents: { lead: string; qualified: string; accepted: string };
   // CRM-source identification for Meta's Conversion-Leads funnel. `leadEventSource`
   // should match the CRM name registered in Meta Leads Access (the page's "CRMs"
@@ -79,7 +80,7 @@ export const clientConfig: ClientConfig = {
     webhookFbLeads: true,
     alerts: true,
   },
-  capiEvents: { lead: "Lead", qualified: "CompleteRegistration", accepted: "Purchase" },
+  capiEvents: { lead: "initial_lead", qualified: "qualified_lead", accepted: "converted_lead" },
   capiCrm: { eventSource: "crm", leadEventSource: "Gavna_Leads" },
   specialSources: [
     { medium: "technology_list", label: "רשימת תפוצה מיוחדת – טכנולוגי" },

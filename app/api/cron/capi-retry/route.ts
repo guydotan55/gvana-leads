@@ -6,11 +6,13 @@ import {
   markDone as markConvDone,
   markRetry as markConvRetry,
   MAX_ATTEMPTS as CONV_MAX_ATTEMPTS,
+  crmFields,
 } from "@/lib/capi-conversions";
 import { getLeads } from "@/lib/sheets";
 import { sendCAPIEvent } from "@/lib/capi";
 import { normalizePhone } from "@/lib/phone";
 import { alert } from "@/lib/alerts";
+import { clientConfig } from "@/client.config";
 
 export const dynamic = "force-dynamic";
 // Two sequential Sheet sweeps (inbound + conversions), each row doing Sheet I/O +
@@ -39,7 +41,13 @@ export async function GET(request: NextRequest) {
       continue;
     }
     const phone = normalizePhone(lead.phone || "");
-    const ok = await sendCAPIEvent({ eventName: "Lead", eventId: row.leadgenId, leadId: row.leadgenId, phone });
+    const ok = await sendCAPIEvent({
+      eventName: clientConfig.capiEvents.lead,
+      eventId: row.leadgenId,
+      leadId: row.leadgenId,
+      phone,
+      customData: crmFields(clientConfig.capiCrm),
+    });
     if (ok) {
       await markDone(row.leadgenId);
     } else {

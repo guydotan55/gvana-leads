@@ -47,6 +47,17 @@ export interface ConvRow {
 
 /* ---------- Pure helpers ---------- */
 
+// CRM-source custom_data that tags an event as a Conversion-Leads CRM event so
+// Meta routes it into the lead-stage funnel (not website events). Empty config
+// values are omitted. Used by BOTH the inbound `initial_lead` send and the
+// qualified/converted conversions, so all three stages land in the same funnel.
+export function crmFields(crm: CapiCrm): { event_source?: string; lead_event_source?: string } {
+  const f: { event_source?: string; lead_event_source?: string } = {};
+  if (crm.eventSource) f.event_source = crm.eventSource;
+  if (crm.leadEventSource) f.lead_event_source = crm.leadEventSource;
+  return f;
+}
+
 // Status → which CAPI conversion to fire. relevant & not_relevant_target are the
 // SAME "qualified" stage (both = in our target audience). under_review,
 // not_relevant, and any other status fire nothing. Organic/manual leads (empty
@@ -75,12 +86,9 @@ export function resolveConversion(
     return null;
   }
 
-  const customData: ResolvedConversion["customData"] = { content_name };
+  // CRM-source fields ride in payloadJson too, so the cron replays them on retry.
+  const customData: ResolvedConversion["customData"] = { content_name, ...crmFields(crm) };
   if (lead.campaignName) customData.campaign_name = lead.campaignName;
-  // CRM-source fields for the Conversion-Leads funnel (config-driven; empty omits).
-  // These ride in payloadJson, so the cron replays them on retry too.
-  if (crm.eventSource) customData.event_source = crm.eventSource;
-  if (crm.leadEventSource) customData.lead_event_source = crm.leadEventSource;
   return { eventName, eventTime: nowSec, customData };
 }
 

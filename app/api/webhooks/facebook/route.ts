@@ -4,9 +4,11 @@ import { verifySignature, fetchLead, fetchFormName, mapLeadToRow, sanitizeTabNam
 import { ensureFormTab, appendLead, leadExists, tabExists } from "@/lib/sheets";
 import { getFormMappings, findTabByFormId, upsertFormMapping } from "@/lib/form-labels";
 import { upsertPending, markDone } from "@/lib/capi-outbox";
+import { crmFields } from "@/lib/capi-conversions";
 import { sendCAPIEvent } from "@/lib/capi";
 import { alert } from "@/lib/alerts";
 import { normalizePhone } from "@/lib/phone";
+import { clientConfig } from "@/client.config";
 
 export const dynamic = "force-dynamic";
 
@@ -58,11 +60,19 @@ async function processLead(leadgenId: string, formId: string): Promise<void> {
   }
   await appendLead(sheetTab, row);
 
-  // 4. CAPI (guaranteed via outbox) — gated by features.capi
+  // 4. CAPI (guaranteed via outbox) — gated by features.capi. Inbound = the
+  // `initial_lead` CRM funnel stage, tagged as a CRM event (crmFields) so it
+  // builds lead coverage for the Conversion-Leads / QUALITY_LEAD optimization.
   if (isFeatureEnabled("capi")) {
     await upsertPending(leadgenId, sheetTab);
     const phone = normalizePhone(row[14] || "");
-    const ok = await sendCAPIEvent({ eventName: "Lead", eventId: leadgenId, leadId: leadgenId, phone });
+    const ok = await sendCAPIEvent({
+      eventName: clientConfig.capiEvents.lead,
+      eventId: leadgenId,
+      leadId: leadgenId,
+      phone,
+      customData: crmFields(clientConfig.capiCrm),
+    });
     if (ok) await markDone(leadgenId);
   }
 }
