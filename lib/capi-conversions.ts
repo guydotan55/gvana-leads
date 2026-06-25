@@ -92,19 +92,32 @@ export function shouldArm(existing: ConvRow | undefined): boolean {
   return !existing || existing.status === "failed";
 }
 
-// Which rows the cron should send. On top of isDue, suppress any due row whose
-// key ALSO has a `done` row in the table — that neutralizes a duplicate-append
-// (two concurrent upserts for one key both observe no row and both append) so the
-// cron never re-sends, and never false-alarms a give-up, for a conversion that
-// already completed. Applied ONLY here, never in writeRow's addressing read (which
-// relies on array-index ↔ sheet-row alignment).
+// Which rows the cron should send — at most ONE per (leadgenId, eventName) key.
+// Two independent guards against a duplicate-append (two concurrent upserts for one
+// key both observe no row and both append):
+//  - suppress a due row whose key ALSO has a `done` row (the conversion already
+//    completed — don't re-send, don't false-alarm a give-up);
+//  - among the remaining due rows, collapse same-key duplicates to one, so the cron
+//    sends a given conversion once per run even when NO `done` row exists yet
+//    (otherwise both stray pendings would send, and we'd be leaning on Meta's dedup
+//    window as the only guard — exactly the invisible-attribution risk to avoid).
+// The leftover duplicate stays pending; once its sibling reaches `done`/`failed` the
+// done-key suppression (or attempt cap) retires it. Applied ONLY here, never in
+// writeRow's addressing read (which relies on array-index ↔ sheet-row alignment).
 export function dueRows(rows: ConvRow[], nowISO: string): ConvRow[] {
   const doneKeys = new Set(
     rows.filter((r) => r.status === "done").map((r) => keyOf(r.leadgenId, r.eventName))
   );
-  return rows.filter(
-    (r) => isDue(r, nowISO) && !doneKeys.has(keyOf(r.leadgenId, r.eventName))
-  );
+  const seen = new Set<string>();
+  const out: ConvRow[] = [];
+  for (const r of rows) {
+    if (!isDue(r, nowISO)) continue;
+    const k = keyOf(r.leadgenId, r.eventName);
+    if (doneKeys.has(k) || seen.has(k)) continue;
+    seen.add(k);
+    out.push(r);
+  }
+  return out;
 }
 
 export function keyOf(leadgenId: string, eventName: string): string {

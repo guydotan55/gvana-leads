@@ -136,6 +136,20 @@ describe("dueRows (dedup-on-read)", () => {
     ];
     expect(dueRows(rows, now)).toHaveLength(0);
   });
+  it("collapses two pending duplicates of the same key (no done yet) to a single send", () => {
+    const rows = [
+      mk({ status: "pending" }),  // both appended by a concurrent-upsert race,
+      mk({ status: "pending" }),  // neither marked done yet → must send ONCE, not twice
+    ];
+    expect(dueRows(rows, now)).toHaveLength(1);
+  });
+  it("still returns distinct keys (collapse is per-key, not global)", () => {
+    const rows = [
+      mk({ eventName: "CompleteRegistration", status: "pending" }),
+      mk({ eventName: "Purchase", status: "pending" }),
+    ];
+    expect(dueRows(rows, now)).toHaveLength(2);
+  });
   it("does not suppress a due row whose key has no done row", () => {
     const rows = [
       mk({ eventName: "Purchase", status: "done" }),              // different key, done
