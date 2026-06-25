@@ -108,6 +108,10 @@ do NOT `git stash`, stay on `main`, commit to `main`."**
   `_capi_outbox`; low odds (internal tab, team works the lead tabs). Proper fix = address
   by re-found physical row, not array index. (The other cold-audit residual — the
   two-pendings-no-done double-send — was CLOSED in `b936335` via per-key collapse in `dueRows`.)
+- **Dormant-duplicate-row clutter (cosmetic):** when a concurrent-append race leaves a
+  duplicate `pending` row, `dueRows`'s per-key collapse + done-key suppression mean it's
+  never sent again — but it lingers in `_capi_conversions_outbox` indefinitely. Harmless
+  at pilot volume; a future cleanup sweep could prune suppressed duplicates.
 
 ## Key code facts
 - `lib/capi.ts`: `CAPIEventParams {eventName,phone,leadId,fbc,fbp,sourceUrl,customData,eventId}`;
