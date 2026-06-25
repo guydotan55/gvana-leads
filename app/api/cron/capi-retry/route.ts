@@ -13,6 +13,10 @@ import { normalizePhone } from "@/lib/phone";
 import { alert } from "@/lib/alerts";
 
 export const dynamic = "force-dynamic";
+// Two sequential Sheet sweeps (inbound + conversions), each row doing Sheet I/O +
+// a Facebook call. Raise the function timeout above Vercel's small default so a
+// backlog can't silently truncate mid-sweep and strand rows until the next day.
+export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;

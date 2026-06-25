@@ -34,4 +34,19 @@ describe("sendCAPIEvent eventTime", () => {
     expect(body.data[0].event_time).toBeGreaterThanOrEqual(before);
     expect(body.data[0].event_time).toBeLessThanOrEqual(after);
   });
+
+  it("falls back to now when eventTime is 0 (corrupt/blank outbox cell, would be rejected as >7d old)", async () => {
+    let body: any;
+    global.fetch = (async (_url: string, init: any) => {
+      body = JSON.parse(init.body);
+      return { ok: true, text: async () => "" } as Response;
+    }) as any;
+
+    const before = Math.floor(Date.now() / 1000);
+    await sendCAPIEvent({ eventName: "CompleteRegistration", eventId: "l3", leadId: "l3", eventTime: 0 });
+    const after = Math.floor(Date.now() / 1000);
+
+    expect(body.data[0].event_time).toBeGreaterThanOrEqual(before);
+    expect(body.data[0].event_time).toBeLessThanOrEqual(after);
+  });
 });

@@ -33,6 +33,10 @@ export interface ClientConfig {
   // QUALITY_LEAD ad set to optimize on our signal. `lead` documents the inbound
   // event Phase 1 already sends (not re-wired here).
   capiEvents: { lead: string; qualified: string; accepted: string };
+  // CRM-source identification for Meta's Conversion-Leads funnel. `leadEventSource`
+  // should match the CRM name registered in Meta Leads Access (the page's "CRMs"
+  // tab). Sent in custom_data on qualified/accepted conversions; empty omits.
+  capiCrm: { eventSource: string; leadEventSource: string };
   // Lead sources identified by their utm_medium at intake. Each becomes a
   // top-level option in the dashboard source filter.
   specialSources: Array<{ medium: string; label: string }>;
@@ -76,6 +80,7 @@ export const clientConfig: ClientConfig = {
     alerts: true,
   },
   capiEvents: { lead: "Lead", qualified: "CompleteRegistration", accepted: "Purchase" },
+  capiCrm: { eventSource: "crm", leadEventSource: "Gavna_Leads" },
   specialSources: [
     { medium: "technology_list", label: "רשימת תפוצה מיוחדת – טכנולוגי" },
   ],

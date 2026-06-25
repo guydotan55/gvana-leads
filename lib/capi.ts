@@ -47,9 +47,13 @@ export async function sendCAPIEvent(params: CAPIEventParams): Promise<boolean> {
   if (params.fbc) userData.fbc = params.fbc;
   if (params.fbp) userData.fbp = params.fbp;
 
+  // Guard against a non-positive eventTime (e.g. a corrupt/blank outbox cell that
+  // parsed to 0): event_time=0 is epoch 1970, which Meta rejects as >7 days old,
+  // so a damaged retry row would burn all attempts. Fall back to now in that case.
+  const t = params.eventTime;
   const eventData: Record<string, unknown> = {
     event_name: params.eventName,
-    event_time: params.eventTime ?? Math.floor(Date.now() / 1000),
+    event_time: typeof t === "number" && t > 0 ? t : Math.floor(Date.now() / 1000),
     action_source: "system_generated",
     user_data: userData,
   };

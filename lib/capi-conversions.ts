@@ -11,10 +11,26 @@ export interface CapiEvents {
   accepted: string;
 }
 
+// CRM-source identification for Meta's Conversion-Leads funnel. Sent in
+// custom_data so Meta recognizes the event as a CRM lead-stage update.
+// `leadEventSource` should match the CRM name registered in Meta Leads Access
+// (the page's "CRMs" tab — e.g. "Gavna_Leads"). Config-driven; an empty string
+// omits the field. (Meta ignores unknown custom_data, so this is safe insurance —
+// verify the exact field requirement against the live dataset's setup.)
+export interface CapiCrm {
+  eventSource: string;
+  leadEventSource: string;
+}
+
 export interface ResolvedConversion {
   eventName: string;
   eventTime: number;
-  customData: { content_name: string; campaign_name?: string };
+  customData: {
+    content_name: string;
+    campaign_name?: string;
+    event_source?: string;
+    lead_event_source?: string;
+  };
 }
 
 export interface ConvRow {
@@ -39,6 +55,7 @@ export function resolveConversion(
   status: string,
   lead: { leadId: string; campaignName?: string },
   events: CapiEvents,
+  crm: CapiCrm,
   nowSec: number
 ): ResolvedConversion | null {
   if (!lead.leadId) return null;
@@ -58,9 +75,36 @@ export function resolveConversion(
     return null;
   }
 
-  const customData: { content_name: string; campaign_name?: string } = { content_name };
+  const customData: ResolvedConversion["customData"] = { content_name };
   if (lead.campaignName) customData.campaign_name = lead.campaignName;
+  // CRM-source fields for the Conversion-Leads funnel (config-driven; empty omits).
+  // These ride in payloadJson, so the cron replays them on retry too.
+  if (crm.eventSource) customData.event_source = crm.eventSource;
+  if (crm.leadEventSource) customData.lead_event_source = crm.leadEventSource;
   return { eventName, eventTime: nowSec, customData };
+}
+
+// Pure arming decision for upsertPending: arm (write a pending row) for a fresh
+// key or a `failed` row (re-arm); skip an existing `pending`/`done` row (a
+// same-stage re-mark is a deduped no-op). Extracted so the decision is unit-tested
+// without mocking the Sheet.
+export function shouldArm(existing: ConvRow | undefined): boolean {
+  return !existing || existing.status === "failed";
+}
+
+// Which rows the cron should send. On top of isDue, suppress any due row whose
+// key ALSO has a `done` row in the table — that neutralizes a duplicate-append
+// (two concurrent upserts for one key both observe no row and both append) so the
+// cron never re-sends, and never false-alarms a give-up, for a conversion that
+// already completed. Applied ONLY here, never in writeRow's addressing read (which
+// relies on array-index ↔ sheet-row alignment).
+export function dueRows(rows: ConvRow[], nowISO: string): ConvRow[] {
+  const doneKeys = new Set(
+    rows.filter((r) => r.status === "done").map((r) => keyOf(r.leadgenId, r.eventName))
+  );
+  return rows.filter(
+    (r) => isDue(r, nowISO) && !doneKeys.has(keyOf(r.leadgenId, r.eventName))
+  );
 }
 
 export function keyOf(leadgenId: string, eventName: string): string {
@@ -113,10 +157,15 @@ function rowValues(r: ConvRow): string[] {
   ];
 }
 
-async function writeRow(r: ConvRow): Promise<void> {
+// `snapshot` lets a caller that already read the table reuse it, avoiding a second
+// readAll per write — halves the Sheet reads the cron does per row. The snapshot is
+// the same read the caller's decision was made on, so the computed index is
+// consistent. Appends never shift existing rows, so a stale-but-recent snapshot
+// still addresses existing rows correctly.
+async function writeRow(r: ConvRow, snapshot?: ConvRow[]): Promise<void> {
   await ensureTabWithHeader(TAB, HEADER);
   const sheets = getSheets();
-  const all = await readAll();
+  const all = snapshot ?? (await readAll());
   const idx = all.findIndex((x) => x.leadgenId === r.leadgenId && x.eventName === r.eventName);
   if (idx === -1) {
     await withSheetsRetry(() =>
@@ -163,12 +212,15 @@ export async function upsertPending(
 ): Promise<boolean> {
   const all = await readAll();
   const existing = all.find((x) => x.leadgenId === leadgenId && x.eventName === eventName);
-  if (existing && existing.status !== "failed") return false;
-  await writeRow({
-    leadgenId, eventName, sheetTab,
-    status: "pending", attempts: 0, lastError: "", nextAttemptAt: "",
-    eventTime: eventTimeSec, payloadJson,
-  });
+  if (!shouldArm(existing)) return false;
+  await writeRow(
+    {
+      leadgenId, eventName, sheetTab,
+      status: "pending", attempts: 0, lastError: "", nextAttemptAt: "",
+      eventTime: eventTimeSec, payloadJson,
+    },
+    all
+  );
   return true;
 }
 
@@ -176,7 +228,7 @@ export async function markDone(leadgenId: string, eventName: string): Promise<vo
   const all = await readAll();
   const row = all.find((x) => x.leadgenId === leadgenId && x.eventName === eventName);
   if (!row) return;
-  await writeRow({ ...row, status: "done" });
+  await writeRow({ ...row, status: "done" }, all);
 }
 
 export async function markRetry(
@@ -190,10 +242,9 @@ export async function markRetry(
   const row = all.find((x) => x.leadgenId === leadgenId && x.eventName === eventName);
   if (!row) return;
   const status = attempts >= MAX_ATTEMPTS ? "failed" : "pending";
-  await writeRow({ ...row, status, attempts, lastError, nextAttemptAt: nextAttemptAtISO });
+  await writeRow({ ...row, status, attempts, lastError, nextAttemptAt: nextAttemptAtISO }, all);
 }
 
 export async function readDue(nowISO: string): Promise<ConvRow[]> {
-  const all = await readAll();
-  return all.filter((r) => isDue(r, nowISO));
+  return dueRows(await readAll(), nowISO);
 }

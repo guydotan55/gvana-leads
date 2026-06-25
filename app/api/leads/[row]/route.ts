@@ -70,6 +70,7 @@ export async function PATCH(
         status,
         lead,
         clientConfig.capiEvents,
+        clientConfig.capiCrm,
         Math.floor(Date.now() / 1000)
       );
       if (resolved) {
