@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { isFeatureEnabled } from "./config";
+import { alert } from "./alerts";
 
 interface CAPIConfig {
   pixelId: string;
@@ -39,7 +40,25 @@ interface CAPIEventParams {
 
 export async function sendCAPIEvent(params: CAPIEventParams): Promise<boolean> {
   const config = getConfig();
-  if (!config) return false;
+  if (!config) {
+    // Fail loud on MISCONFIG (feature on but credentials missing) — that path was
+    // silently dropping every conversion. Stay silent only when capi is off (an
+    // intentional choice). Names exactly which env var is absent.
+    if (isFeatureEnabled("capi")) {
+      const missing = [
+        !process.env.FB_PIXEL_ID && "FB_PIXEL_ID",
+        !process.env.FB_ACCESS_TOKEN && "FB_ACCESS_TOKEN",
+      ]
+        .filter(Boolean)
+        .join(", ");
+      console.error(`CAPI not sent — feature enabled but missing env: ${missing}`);
+      await alert(
+        "capi-config-missing",
+        `CAPI is enabled but credentials are missing (${missing}) — conversion events are NOT reaching Meta.`
+      );
+    }
+    return false;
+  }
 
   const userData: Record<string, unknown> = {};
   if (params.phone) userData.ph = [sha256(params.phone)];
