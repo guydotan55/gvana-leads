@@ -276,3 +276,27 @@ export async function readDue(nowISO: string): Promise<ConvRow[]> {
 export async function readAllConversions(): Promise<ConvRow[]> {
   return readAll();
 }
+
+// Append many already-sent rows as `done` in a SINGLE Sheets call. The backfill
+// uses this instead of per-lead upsertPending+markDone (which would be ~6 Sheets
+// round-trips each and time the function out). A duplicate key vs an old `pending`
+// row is harmless — dueRows suppresses the pending via the done-key guard.
+export async function appendDoneConversions(
+  rows: { leadgenId: string; eventName: string; sheetTab: string; eventTime: number; payloadJson: string }[]
+): Promise<void> {
+  if (!rows.length) return;
+  await ensureTabWithHeader(TAB, HEADER);
+  const sheets = getSheets();
+  const values = rows.map((r) => [
+    r.leadgenId, r.eventName, r.sheetTab, "done", "0", "", "", String(r.eventTime), r.payloadJson,
+  ]);
+  await withSheetsRetry(() =>
+    sheets.spreadsheets.values.append({
+      spreadsheetId: getSheetId(),
+      range: `'${TAB}'!A1`,
+      valueInputOption: "RAW",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: { values },
+    })
+  );
+}

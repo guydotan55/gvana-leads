@@ -6,9 +6,8 @@ import { normalizePhone } from "@/lib/phone";
 import { clientConfig } from "@/client.config";
 import {
   resolveConversion,
-  upsertPending as upsertConvPending,
-  markDone as markConvDone,
   readAllConversions,
+  appendDoneConversions,
   keyOf,
 } from "@/lib/capi-conversions";
 
@@ -19,23 +18,23 @@ const QUALIFYING = ["relevant", "not_relevant_target", "accepted"];
 
 // One-time (re-runnable) backfill: fire the CAPI conversion for every lead whose
 // CURRENT status is a qualifying one (relevant/not_relevant_target → qualified_lead,
-// accepted → converted_lead) but whose event was never successfully sent — e.g.
+// accepted → converted_lead) but whose event was never recorded as sent — e.g.
 // leads qualified before the FB token was fixed.
 //
-// Dedup-safe: skips keys already marked `done` (no double-count; event_id=leadId is
-// Meta's second guard). (Re)sends keys with no row OR a stuck `pending` row, so it
-// also clears the failed-inline backlog without depending on the daily cron.
+// Speed: sends events directly and records them with ONE batch write at the end
+// (per-lead outbox writes timed the function out on Hobby's 60s cap). Dedup-safe:
+// skips keys already `done`; Meta also dedups by event_id=leadId. Bounded by
+// ?limit=N (default 40) sends per call; if the response shows `remaining > 0`, open
+// the URL again until remaining is 0 (already-sent keys are skipped on re-run).
 //
-// Auth: this path is NOT in middleware's PUBLIC_PATHS, so it requires a dashboard
-// session — trigger it by opening the URL while logged into the dashboard.
-// Bounded by ?limit=N (default 25) sends per call so it can't time out; if the
-// response shows `remaining > 0`, just open it again until remaining is 0.
+// Auth: NOT in middleware PUBLIC_PATHS → requires a dashboard session, so trigger
+// it by opening the URL while logged into the dashboard.
 export async function GET(request: NextRequest) {
   if (!isFeatureEnabled("capi")) {
     return NextResponse.json({ error: "capi feature disabled" }, { status: 400 });
   }
 
-  const limit = parseInt(request.nextUrl.searchParams.get("limit") || "25", 10) || 25;
+  const limit = parseInt(request.nextUrl.searchParams.get("limit") || "40", 10) || 40;
   const nowSec = Math.floor(Date.now() / 1000);
 
   const leads = await getLeads();
@@ -48,14 +47,14 @@ export async function GET(request: NextRequest) {
   const summary = {
     totalLeads: leads.length,
     eligible: 0,        // qualifying status + non-empty leadId
-    sent: 0,            // inline send ok → done
-    queued: 0,          // armed but send returned false → left pending
+    sent: 0,            // event accepted by Meta
+    failed: 0,          // send returned false (re-run to retry)
     deduped: 0,         // already done → skipped
     skippedNoLeadId: 0, // qualifying status but organic/manual (no lead_id)
     remaining: 0,       // eligible-not-done beyond this run's limit — re-run to process
     errors: 0,
   };
-  const fired: { row: number; sheetTab: string; leadId: string; event: string; ok: boolean }[] = [];
+  const doneRows: { leadgenId: string; eventName: string; sheetTab: string; eventTime: number; payloadJson: string }[] = [];
 
   let processed = 0;
   for (const lead of leads) {
@@ -75,15 +74,10 @@ export async function GET(request: NextRequest) {
       summary.remaining++;
       continue;
     }
+    processed++;
+    doneKeys.add(key); // don't double-send if a duplicate lead row shares the key
 
     try {
-      await upsertConvPending(
-        lead.leadId,
-        resolved.eventName,
-        lead.sheetTab,
-        resolved.eventTime,
-        JSON.stringify(resolved.customData)
-      );
       const ok = await sendCAPIEvent({
         eventName: resolved.eventName,
         eventId: lead.leadId,
@@ -93,19 +87,36 @@ export async function GET(request: NextRequest) {
         eventTime: resolved.eventTime,
       });
       if (ok) {
-        await markConvDone(lead.leadId, resolved.eventName);
         summary.sent++;
+        doneRows.push({
+          leadgenId: lead.leadId,
+          eventName: resolved.eventName,
+          sheetTab: lead.sheetTab,
+          eventTime: resolved.eventTime,
+          payloadJson: JSON.stringify(resolved.customData),
+        });
       } else {
-        summary.queued++;
+        summary.failed++;
       }
-      fired.push({ row: lead.row, sheetTab: lead.sheetTab, leadId: lead.leadId, event: resolved.eventName, ok });
     } catch (err) {
       console.error(`backfill error for lead ${lead.leadId} (${resolved.eventName}):`, err);
       summary.errors++;
     }
-    processed++;
-    doneKeys.add(key); // don't double-send if a duplicate lead row shares the key
   }
 
-  return NextResponse.json({ ok: true, summary, fired });
+  // Single batch write of everything that sent OK.
+  try {
+    await appendDoneConversions(doneRows);
+  } catch (err) {
+    console.error("backfill: appendDoneConversions failed:", err);
+    // events already reached Meta; the done-rows just didn't persist. Re-running
+    // would re-send (Meta dedups), so this is recoverable, not data loss.
+    return NextResponse.json({
+      ok: false,
+      warning: "events sent but outbox bookkeeping failed to persist; re-run is safe (Meta dedups)",
+      summary,
+    });
+  }
+
+  return NextResponse.json({ ok: true, summary });
 }
