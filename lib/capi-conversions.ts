@@ -269,3 +269,10 @@ export async function markRetry(
 export async function readDue(nowISO: string): Promise<ConvRow[]> {
   return dueRows(await readAll(), nowISO);
 }
+
+// Every conversion row. Exposed for the one-time backfill so it can skip keys
+// already marked `done` (avoid re-sending) while still (re)sending no-row and
+// `pending` keys. Normal flows use readDue.
+export async function readAllConversions(): Promise<ConvRow[]> {
+  return readAll();
+}
