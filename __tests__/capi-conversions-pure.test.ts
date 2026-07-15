@@ -33,6 +33,11 @@ describe("resolveConversion", () => {
     expect(r?.eventName).toBe("CompleteRegistration");
     expect(r?.customData.content_name).toBe("lead_not_relevant_target");
   });
+  it("future_cohort → same qualified event (young, future cohort)", () => {
+    const r = resolveConversion("future_cohort", lead, events, crm, 1700000000);
+    expect(r?.eventName).toBe("CompleteRegistration");
+    expect(r?.customData.content_name).toBe("lead_future_cohort");
+  });
   it("accepted → accepted event", () => {
     const r = resolveConversion("accepted", lead, events, crm, 1700000000);
     expect(r?.eventName).toBe("Purchase");

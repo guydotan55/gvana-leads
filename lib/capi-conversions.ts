@@ -58,8 +58,9 @@ export function crmFields(crm: CapiCrm): { event_source?: string; lead_event_sou
   return f;
 }
 
-// Status → which CAPI conversion to fire. relevant & not_relevant_target are the
-// SAME "qualified" stage (both = in our target audience). under_review,
+// Status → which CAPI conversion to fire. relevant, not_relevant_target &
+// future_cohort are the SAME "qualified" stage (all = in our target audience;
+// future_cohort = too young now, relevant for a future cohort). under_review,
 // not_relevant, and any other status fire nothing. Organic/manual leads (empty
 // leadId) are unattributable, so they fire nothing either.
 export function resolveConversion(
@@ -79,6 +80,9 @@ export function resolveConversion(
   } else if (status === "not_relevant_target") {
     eventName = events.qualified;
     content_name = "lead_not_relevant_target";
+  } else if (status === "future_cohort") {
+    eventName = events.qualified;
+    content_name = "lead_future_cohort";
   } else if (status === "accepted") {
     eventName = events.accepted;
     content_name = "lead_accepted";

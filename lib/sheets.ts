@@ -2,7 +2,7 @@ import { google, sheets_v4 } from "googleapis";
 import columnsConfig from "@/config/columns.json";
 import { withSheetsRetry } from "@/lib/sheets-retry";
 
-export const VALID_STATUSES = ["new", "relevant", "not_relevant", "not_relevant_target", "unavailable", "under_review", "accepted", "rejected"];
+export const VALID_STATUSES = ["new", "relevant", "not_relevant", "not_relevant_target", "future_cohort", "unavailable", "under_review", "accepted", "rejected"];
 
 export interface Lead {
   row: number;

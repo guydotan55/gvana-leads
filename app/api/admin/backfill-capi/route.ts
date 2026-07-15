@@ -14,11 +14,12 @@ import {
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const QUALIFYING = ["relevant", "not_relevant_target", "accepted"];
+const QUALIFYING = ["relevant", "not_relevant_target", "future_cohort", "accepted"];
 
 // One-time (re-runnable) backfill: fire the CAPI conversion for every lead whose
-// CURRENT status is a qualifying one (relevant/not_relevant_target → qualified_lead,
-// accepted → converted_lead) but whose event was never recorded as sent — e.g.
+// CURRENT status is a qualifying one (relevant/not_relevant_target/future_cohort
+// → qualified_lead, accepted → converted_lead) but whose event was never recorded
+// as sent — e.g.
 // leads qualified before the FB token was fixed.
 //
 // Speed: sends events directly and records them with ONE batch write at the end
