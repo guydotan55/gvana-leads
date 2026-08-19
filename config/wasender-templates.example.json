@@ -1,0 +1,14 @@
+{
+  "first_contact_he": {
+    "language": "he",
+    "category": "LOCAL",
+    "body": "שלום {{1}}, פנית אלינו דרך {{2}}. נשמח לחזור אליך — מתי נוח?",
+    "buttons": []
+  },
+  "interview_invite_he": {
+    "language": "he",
+    "category": "LOCAL",
+    "body": "{{1}}, נשמח לזמן אותך לראיון ב-{{2}}. מאשרים?",
+    "buttons": []
+  }
+}

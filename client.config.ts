@@ -42,6 +42,11 @@ export interface ClientConfig {
   // top-level option in the dashboard source filter.
   specialSources: Array<{ medium: string; label: string }>;
   integrations: {
+    whatsapp: {
+      provider: "infobip" | "wasender";
+      batchSize?: number;     // Wasender only. Cron processes this many leads per tick. Default 8.
+      dailyCap?: number;      // Wasender only. Hard ceiling on outbound per session per day. Default 60 (warm-up).
+    };
     infobip: { enabled: boolean };
     capi: { enabled: boolean };
     sheets: { enabled: boolean };
@@ -87,7 +92,8 @@ export const clientConfig: ClientConfig = {
     { medium: "technology_list", label: "רשימת תפוצה מיוחדת – טכנולוגי" },
   ],
   integrations: {
-    infobip: { enabled: true },
+    whatsapp: { provider: "wasender", dailyCap: 60, batchSize: 8 },
+    infobip: { enabled: false },
     capi: { enabled: true },
     sheets: { enabled: true },
   },
