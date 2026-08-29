@@ -7,6 +7,7 @@
  * (lib/sheets.ts), so views never bleed into the dashboard.
  */
 import { google, sheets_v4 } from "googleapis";
+import { withSheetsRetry } from "@/lib/sheets-retry";
 
 const VIEWS_TAB = "_form_views";
 
@@ -97,6 +98,51 @@ export async function appendView(input: ViewInput): Promise<void> {
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [row] },
   });
+
+  // Invalidate the in-memory cache so the next stats call reflects this view.
+  rawViewsCache = null;
+}
+
+/**
+ * In-memory cache of the raw rows. Hits the sheet at most once per
+ * VIEWS_CACHE_TTL_MS regardless of how many concurrent stats
+ * computations ask for view counts.
+ */
+type RawRow = { slug: string; ts: number; vid: string };
+const VIEWS_CACHE_TTL_MS = 30_000;
+let rawViewsCache: { rows: RawRow[]; expires: number } | null = null;
+
+async function loadRawViewRows(): Promise<RawRow[]> {
+  if (rawViewsCache && rawViewsCache.expires > Date.now()) {
+    return rawViewsCache.rows;
+  }
+  const sheets = getSheets();
+  const spreadsheetId = getSheetId();
+
+  const rows = await withSheetsRetry(async () => {
+    const meta = await sheets.spreadsheets.get({ spreadsheetId });
+    const exists = meta.data.sheets?.some((s) => s.properties?.title === VIEWS_TAB);
+    if (!exists) return [] as RawRow[];
+
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${VIEWS_TAB}'!A2:H`,
+    });
+    const raw = (res.data.values as string[][] | undefined) || [];
+    let legacyCounter = 0;
+    const out: RawRow[] = [];
+    for (const r of raw) {
+      const slug = r[0];
+      const ts = Date.parse(r[1] || "");
+      if (!slug || Number.isNaN(ts)) continue;
+      const vid = (r[7] || "").trim() || `_legacy_${legacyCounter++}`;
+      out.push({ slug, ts, vid });
+    }
+    return out;
+  });
+
+  rawViewsCache = { rows, expires: Date.now() + VIEWS_CACHE_TTL_MS };
+  return rows;
 }
 
 /**
@@ -108,36 +154,17 @@ export async function appendView(input: ViewInput): Promise<void> {
  * Legacy rows recorded before the unique-visitor change have an empty
  * visitor_id — we count each of those rows as its own visitor (one
  * row = one visit) so old data stays meaningful. New rows get proper
- * dedup. As legacy rows age out of the 30-day window, the metric
- * becomes fully accurate.
+ * dedup.
  */
 export async function getViewCounts(days: 7 | 30 | number): Promise<Record<string, number>> {
-  const sheets = getSheets();
-  const spreadsheetId = getSheetId();
-
-  const meta = await sheets.spreadsheets.get({ spreadsheetId });
-  const exists = meta.data.sheets?.some((s) => s.properties?.title === VIEWS_TAB);
-  if (!exists) return {};
-
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `'${VIEWS_TAB}'!A2:H`,
-  });
-  const rows = (res.data.values as string[][] | undefined) || [];
+  const rows = await loadRawViewRows();
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
 
-  // slug → set of identifiers seen. Real visitor ids dedupe; legacy
-  // empty-id rows get a synthetic per-row id so they each count once.
   const seen: Record<string, Set<string>> = {};
-  let legacyCounter = 0;
-  for (const row of rows) {
-    const slug = row[0];
-    const ts = Date.parse(row[1] || "");
-    if (!slug || Number.isNaN(ts)) continue;
-    if (ts < cutoff) continue;
-    const vid = (row[7] || "").trim() || `_legacy_${legacyCounter++}`;
-    if (!seen[slug]) seen[slug] = new Set();
-    seen[slug].add(vid);
+  for (const r of rows) {
+    if (r.ts < cutoff) continue;
+    if (!seen[r.slug]) seen[r.slug] = new Set();
+    seen[r.slug].add(r.vid);
   }
 
   const counts: Record<string, number> = {};

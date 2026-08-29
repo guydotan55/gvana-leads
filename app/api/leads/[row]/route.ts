@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getLeads, updateLeadCells, deleteLead, VALID_STATUSES } from "@/lib/sheets";
+import { getLeads, updateLeadCells, deleteLead, invalidateLeadsCache, VALID_STATUSES } from "@/lib/sheets";
 import { sendCAPIEvent } from "@/lib/capi";
 import { isFeatureEnabled } from "@/lib/config";
 import { normalizePhone } from "@/lib/phone";
@@ -57,6 +57,7 @@ export async function PATCH(
     }
 
     await updateLeadCells(lead.sheetTab, rowNum, updates);
+    invalidateLeadsCache();
 
     // Fire qualified/accepted CAPI conversions — guaranteed (outbox + retry),
     // correct (normalized phone, event_id, preserved event_time), config-driven.
@@ -148,6 +149,7 @@ export async function DELETE(
     }
 
     await deleteLead(lead.sheetTab, rowNum);
+    invalidateLeadsCache();
 
     return NextResponse.json({ success: true });
   } catch (error) {
