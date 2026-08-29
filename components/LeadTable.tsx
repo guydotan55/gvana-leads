@@ -12,6 +12,12 @@ interface LeadTableProps {
   onHandledByChange: (lead: Lead, handledBy: string) => void;
   onCommentChange: (lead: Lead, comment: string) => void;
   onDelete: (lead: Lead) => Promise<void> | void;
+  onOpenLead?: (lead: Lead, opts?: { focusSend?: boolean }) => void;
+  pendingDeleteKey?: string | null;
+}
+
+function leadKey(l: Lead): string {
+  return `${l.sheetTab}:${l.row}`;
 }
 
 const statusColorClasses: Record<string, string> = {
@@ -154,8 +160,6 @@ function NotesExpander({ notes }: { notes: string }) {
 
 /* ---------- Handled By ---------- */
 
-const HANDLED_BY_OPTIONS = ["נדב", "תמר"];
-
 function HandledBySelect({
   lead,
   onChange,
@@ -163,8 +167,9 @@ function HandledBySelect({
   lead: Lead;
   onChange: (lead: Lead, handledBy: string) => void;
 }) {
+  const handlers = clientConfig.handlers;
   const [isOther, setIsOther] = useState(
-    lead.handledBy !== "" && !HANDLED_BY_OPTIONS.includes(lead.handledBy)
+    lead.handledBy !== "" && !handlers.includes(lead.handledBy)
   );
   // Only focus the input when the user JUST clicked "Other" — never on
   // the initial render. Previously, pre-existing custom values caused
@@ -200,7 +205,7 @@ function HandledBySelect({
         <input
           ref={inputRef}
           type="text"
-          defaultValue={HANDLED_BY_OPTIONS.includes(lead.handledBy) ? "" : lead.handledBy}
+          defaultValue={handlers.includes(lead.handledBy) ? "" : lead.handledBy}
           onBlur={(e) => {
             const val = e.target.value.trim();
             if (val) {
@@ -219,7 +224,7 @@ function HandledBySelect({
         <button
           onClick={() => {
             setIsOther(false);
-            if (!HANDLED_BY_OPTIONS.includes(lead.handledBy)) {
+            if (!handlers.includes(lead.handledBy)) {
               onChange(lead, "");
             }
           }}
@@ -238,7 +243,7 @@ function HandledBySelect({
       className="px-2 py-1.5 rounded text-xs border border-gray-200 bg-white text-gray-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-sky/30 min-h-[32px]"
     >
       <option value="">{t("leads.handledBy.select")}</option>
-      {HANDLED_BY_OPTIONS.map((name) => (
+      {handlers.map((name) => (
         <option key={name} value={name}>{name}</option>
       ))}
       <option value="__other__">{t("leads.handledBy.other")}</option>
@@ -389,6 +394,103 @@ function StatusSelect({
       )}
     </div>
   );
+}
+
+/* ---------- Next Step Cell ----------
+   UX prime directive #5: status changes show the next action. When a
+   lead becomes "relevant", the dominant cell-CTA becomes "send first
+   WhatsApp" (opens the drawer focused on the send section, since
+   template selection is needed). "under_review" gets two-button pair
+   (accept / reject). "accepted" shows a quiet badge. Other statuses
+   render the standard StatusSelect. */
+
+function NextStepCell({
+  lead,
+  onStatusChange,
+  onOpenLead,
+}: {
+  lead: Lead;
+  onStatusChange: (lead: Lead, status: string, attempts?: number, plan?: string) => void;
+  onOpenLead?: (lead: Lead, opts?: { focusSend?: boolean }) => void;
+}) {
+  // "relevant" but NOT yet in interview pipeline → send first WhatsApp
+  if (lead.status === "relevant") {
+    return (
+      <div className="flex flex-col items-stretch gap-1.5">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenLead?.(lead, { focusSend: true });
+          }}
+          className="inline-flex items-center justify-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-lg bg-brand-navy text-white text-xs font-semibold hover:opacity-90 transition-opacity whitespace-nowrap"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M22 2L11 13" />
+            <path d="M22 2l-7 20-4-9-9-4 20-7z" />
+          </svg>
+          {t("leads.nextStep.sendFirstWhatsApp")}
+        </button>
+        {/* Keep status pill compact below, so the admin can still
+            re-route (e.g. mark "not_relevant" if they realized). */}
+        <StatusSelect lead={lead} onStatusChange={onStatusChange} />
+      </div>
+    );
+  }
+
+  if (lead.status === "under_review") {
+    return (
+      <div className="flex flex-col items-stretch gap-1.5">
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onStatusChange(lead, "accepted");
+            }}
+            className="flex-1 inline-flex items-center justify-center gap-1 min-h-[36px] px-2 py-1.5 rounded-lg bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition-colors whitespace-nowrap"
+          >
+            {t("leads.nextStep.markAccepted")}
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onStatusChange(lead, "rejected");
+            }}
+            className="inline-flex items-center justify-center min-h-[36px] px-2 py-1.5 rounded-lg bg-white text-red-600 text-xs font-semibold border border-red-200 hover:bg-red-50 transition-colors whitespace-nowrap"
+          >
+            {t("leads.nextStep.markRejected")}
+          </button>
+        </div>
+        {/* Plan multi-select stays here since this lead is in the
+            interview pipeline and the admin may want to set the plan. */}
+        <PlanMultiSelect
+          selectedPlans={lead.plan || ""}
+          onChange={(newPlan) => onStatusChange(lead, lead.status, undefined, newPlan)}
+        />
+      </div>
+    );
+  }
+
+  if (lead.status === "accepted") {
+    return (
+      <div className="flex flex-col items-stretch gap-1.5">
+        <span className="inline-flex items-center justify-center gap-1 min-h-[32px] px-2 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200 whitespace-nowrap">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          {t("leads.nextStep.accepted")}
+        </span>
+        <PlanMultiSelect
+          selectedPlans={lead.plan || ""}
+          onChange={(newPlan) => onStatusChange(lead, lead.status, undefined, newPlan)}
+        />
+      </div>
+    );
+  }
+
+  return <StatusSelect lead={lead} onStatusChange={onStatusChange} />;
 }
 
 /* ---------- Sorting ---------- */
@@ -607,7 +709,10 @@ function CommentEditor({
   );
 }
 
-/* ---------- Delete Row Action ---------- */
+/* ---------- Delete Row Action ----------
+   No "Are you sure?" modal. Click = optimistic delete; the parent
+   shows an UndoToast for 8s before committing the actual API call.
+   This is the per the UX prime directive "forgiveness by default". */
 
 function DeleteRowAction({
   lead,
@@ -618,82 +723,14 @@ function DeleteRowAction({
   onDelete: (lead: Lead) => Promise<void> | void;
   variant?: "icon" | "icon-sm";
 }) {
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!confirming) return;
-    function onDocClick(e: MouseEvent) {
-      if (!containerRef.current?.contains(e.target as Node)) {
-        setConfirming(false);
-      }
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setConfirming(false);
-    }
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [confirming]);
-
-  async function doDelete() {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await onDelete(lead);
-    } finally {
-      setBusy(false);
-      setConfirming(false);
-    }
-  }
-
-  if (confirming) {
-    return (
-      <div
-        ref={containerRef}
-        className="inline-flex items-center gap-1 rounded-lg bg-red-50 border border-red-200 px-1.5 py-1"
-        role="group"
-        aria-label={t("leads.delete.button")}
-      >
-        <span className="text-[11px] font-medium text-red-700 px-1 truncate max-w-[120px]">
-          {t("leads.delete.confirmPrefix")} {lead.fullName || "—"}?
-        </span>
-        <button
-          type="button"
-          onClick={doDelete}
-          disabled={busy}
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors"
-        >
-          {busy ? (
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="animate-spin">
-              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-            </svg>
-          ) : (
-            <TrashIcon size={11} />
-          )}
-          {t("leads.delete.confirmAction")}
-        </button>
-        <button
-          type="button"
-          onClick={() => setConfirming(false)}
-          disabled={busy}
-          className="px-2 py-0.5 rounded-md text-xs font-medium text-gray-600 hover:bg-white transition-colors"
-        >
-          {t("common.cancel")}
-        </button>
-      </div>
-    );
-  }
-
-  const sizeCls = variant === "icon-sm" ? "w-7 h-7" : "w-8 h-8";
+  const sizeCls = variant === "icon-sm" ? "w-9 h-9" : "w-10 h-10";
   return (
     <button
       type="button"
-      onClick={() => setConfirming(true)}
+      onClick={(e) => {
+        e.stopPropagation();
+        onDelete(lead);
+      }}
       title={t("leads.delete.button")}
       aria-label={t("leads.delete.button")}
       className={`group inline-flex items-center justify-center ${sizeCls} rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors`}
@@ -733,15 +770,36 @@ function LeadCard({
   onHandledByChange,
   onCommentChange,
   onDelete,
+  onOpenLead,
+  pending,
 }: {
   lead: Lead;
   onStatusChange: (lead: Lead, status: string, attempts?: number, plan?: string) => void;
   onHandledByChange: (lead: Lead, handledBy: string) => void;
   onCommentChange: (lead: Lead, comment: string) => void;
   onDelete: (lead: Lead) => Promise<void> | void;
+  onOpenLead?: (lead: Lead, opts?: { focusSend?: boolean }) => void;
+  pending?: boolean;
 }) {
+  function openDrawer() {
+    if (!pending) onOpenLead?.(lead);
+  }
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-3">
+    <div
+      className={`bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-3 ${
+        pending ? "opacity-50 line-through pointer-events-none" : ""
+      }`}
+      onClick={openDrawer}
+      role={onOpenLead ? "button" : undefined}
+      tabIndex={onOpenLead ? 0 : undefined}
+      onKeyDown={(e) => {
+        if ((e.key === "Enter" || e.key === " ") && onOpenLead) {
+          e.preventDefault();
+          openDrawer();
+        }
+      }}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="mb-1">
@@ -750,24 +808,24 @@ function LeadCard({
           <p className="font-medium text-gray-900 text-sm truncate">{lead.fullName}</p>
           <p className="text-xs text-gray-500 font-mono mt-0.5" dir="ltr">{lead.phone}</p>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
           <SourceBadge source={lead.platform} />
           <DeleteRowAction lead={lead} onDelete={onDelete} variant="icon-sm" />
         </div>
       </div>
       <div className="text-xs text-gray-400" dir="ltr">{formatDate(lead.createdTime)}</div>
-      <div className="flex flex-col gap-2">
-        <StatusSelect lead={lead} onStatusChange={onStatusChange} />
+      <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+        <NextStepCell lead={lead} onStatusChange={onStatusChange} onOpenLead={onOpenLead} />
       </div>
-      <div className="pt-1 border-t border-gray-50">
+      <div className="pt-1 border-t border-gray-50" onClick={(e) => e.stopPropagation()}>
         <p className="text-xs text-gray-400 mb-1">{t("leads.table.handledBy")}</p>
         <HandledBySelect lead={lead} onChange={onHandledByChange} />
       </div>
-      <div className="pt-1 border-t border-gray-50">
+      <div className="pt-1 border-t border-gray-50" onClick={(e) => e.stopPropagation()}>
         <CommentEditor lead={lead} onChange={onCommentChange} />
       </div>
       {lead.notes && (
-        <div className="pt-1 border-t border-gray-50">
+        <div className="pt-1 border-t border-gray-50" onClick={(e) => e.stopPropagation()}>
           <NotesExpander notes={lead.notes} />
         </div>
       )}
@@ -783,92 +841,82 @@ function DesktopLeadRow({
   onHandledByChange,
   onCommentChange,
   onDelete,
+  onOpenLead,
+  pending,
 }: {
   lead: Lead;
   onStatusChange: (lead: Lead, status: string, attempts?: number, plan?: string) => void;
   onHandledByChange: (lead: Lead, handledBy: string) => void;
   onCommentChange: (lead: Lead, comment: string) => void;
   onDelete: (lead: Lead) => Promise<void> | void;
+  onOpenLead?: (lead: Lead, opts?: { focusSend?: boolean }) => void;
+  pending?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const hasNotes = !!lead.notes?.trim();
-  const parsed = hasNotes ? parseNotes(lead.notes) : [];
+  function openDrawer(e: React.MouseEvent | React.KeyboardEvent) {
+    if (pending) return;
+    // The row is the "open drawer" target. Inline edit zones use a
+    // stop-bubble wrapper (<NoOpenWrap>) so clicks there don't open
+    // the drawer. Other clicks anywhere in the row do.
+    const target = e.target as HTMLElement;
+    if (target.closest("[data-no-open]")) return;
+    onOpenLead?.(lead);
+  }
+
+  const rowCls = `border-b border-gray-50 transition-colors align-top ${
+    pending
+      ? "opacity-50 line-through pointer-events-none"
+      : "hover:bg-blue-50/30 cursor-pointer"
+  }`;
 
   return (
-    <>
-      <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors align-top">
-        <td className="px-3 py-3 whitespace-nowrap">
-          <LeadTypeBadge lead={lead} />
-        </td>
-        <td className="px-3 py-3">
-          <div className="flex items-center gap-1.5">
-            <span className="font-medium text-gray-900 text-sm">
-              {lead.fullName}
-            </span>
-            {hasNotes && parsed.length > 0 && (
-              <button
-                onClick={() => setExpanded(!expanded)}
-                className="flex items-center gap-0.5 text-xs text-blue-600 hover:text-blue-700 px-1.5 py-0.5 rounded hover:bg-blue-50 transition-colors"
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{ transform: expanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-                {expanded ? t("leads.hideAnswers") : t("leads.showAnswers")}
-              </button>
-            )}
-          </div>
-        </td>
-        <td className="px-3 py-3">
-          <span className="text-sm text-gray-600 font-mono" dir="ltr">
-            {lead.phone}
-          </span>
-        </td>
-        <td className="px-3 py-3">
-          <span className="text-sm text-gray-500 whitespace-nowrap" dir="ltr">
-            {formatDate(lead.createdTime)}
-          </span>
-        </td>
-        <td className="px-3 py-3">
-          <StatusSelect lead={lead} onStatusChange={onStatusChange} />
-        </td>
-        <td className="px-3 py-3">
-          <HandledBySelect lead={lead} onChange={onHandledByChange} />
-        </td>
-        <td className="px-3 py-3">
-          <SourceBadge source={lead.platform} />
-        </td>
-        <td className="px-3 py-3 min-w-[220px] max-w-[320px]">
-          <CommentEditor lead={lead} onChange={onCommentChange} />
-        </td>
-        <td className="px-2 py-3 w-px whitespace-nowrap text-end">
-          <DeleteRowAction lead={lead} onDelete={onDelete} />
-        </td>
-      </tr>
-      {expanded && parsed.length > 0 && (
-        <tr className="bg-blue-50/30">
-          <td colSpan={9} className="px-4 py-3">
-            <div className="grid grid-cols-2 gap-3">
-              {parsed.map((item, i) => (
-                <div key={i} className="bg-white rounded-lg p-3 border border-gray-100">
-                  <p className="text-xs font-semibold text-gray-400 mb-1">{item.label}</p>
-                  <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{item.value}</p>
-                </div>
-              ))}
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
+    <tr
+      className={rowCls}
+      onClick={openDrawer}
+      role={onOpenLead ? "button" : undefined}
+      tabIndex={onOpenLead && !pending ? 0 : undefined}
+      onKeyDown={(e) => {
+        if ((e.key === "Enter" || e.key === " ") && onOpenLead && !pending) {
+          e.preventDefault();
+          openDrawer(e);
+        }
+      }}
+    >
+      <td className="px-3 py-3 whitespace-nowrap">
+        <LeadTypeBadge lead={lead} />
+      </td>
+      <td className="px-3 py-3">
+        <span className="font-medium text-gray-900 text-sm">{lead.fullName}</span>
+      </td>
+      <td className="px-3 py-3">
+        <span className="text-sm text-gray-600 font-mono" dir="ltr">
+          {lead.phone}
+        </span>
+      </td>
+      <td className="px-3 py-3">
+        <span className="text-sm text-gray-500 whitespace-nowrap" dir="ltr">
+          {formatDate(lead.createdTime)}
+        </span>
+      </td>
+      <td className="px-3 py-3" data-no-open onClick={(e) => e.stopPropagation()}>
+        <NextStepCell lead={lead} onStatusChange={onStatusChange} onOpenLead={onOpenLead} />
+      </td>
+      <td className="px-3 py-3" data-no-open onClick={(e) => e.stopPropagation()}>
+        <HandledBySelect lead={lead} onChange={onHandledByChange} />
+      </td>
+      <td className="px-3 py-3">
+        <SourceBadge source={lead.platform} />
+      </td>
+      <td
+        className="px-3 py-3 min-w-[220px] max-w-[320px]"
+        data-no-open
+        onClick={(e) => e.stopPropagation()}
+      >
+        <CommentEditor lead={lead} onChange={onCommentChange} />
+      </td>
+      <td className="px-2 py-3 w-px whitespace-nowrap text-end" data-no-open onClick={(e) => e.stopPropagation()}>
+        <DeleteRowAction lead={lead} onDelete={onDelete} />
+      </td>
+    </tr>
   );
 }
 
@@ -880,6 +928,8 @@ export default function LeadTable({
   onHandledByChange,
   onCommentChange,
   onDelete,
+  onOpenLead,
+  pendingDeleteKey,
 }: LeadTableProps) {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -916,12 +966,14 @@ export default function LeadTable({
           <div className="md:hidden space-y-3">
             {sortedLeads.map((lead) => (
               <LeadCard
-                key={`${lead.sheetTab}:${lead.row}`}
+                key={leadKey(lead)}
                 lead={lead}
                 onStatusChange={onStatusChange}
                 onHandledByChange={onHandledByChange}
                 onCommentChange={onCommentChange}
                 onDelete={onDelete}
+                onOpenLead={onOpenLead}
+                pending={pendingDeleteKey === leadKey(lead)}
               />
             ))}
           </div>
@@ -950,12 +1002,14 @@ export default function LeadTable({
                 <tbody>
                   {sortedLeads.map((lead) => (
                     <DesktopLeadRow
-                      key={`${lead.sheetTab}:${lead.row}`}
+                      key={leadKey(lead)}
                       lead={lead}
                       onStatusChange={onStatusChange}
                       onHandledByChange={onHandledByChange}
                       onCommentChange={onCommentChange}
                       onDelete={onDelete}
+                      onOpenLead={onOpenLead}
+                      pending={pendingDeleteKey === leadKey(lead)}
                     />
                   ))}
                 </tbody>
