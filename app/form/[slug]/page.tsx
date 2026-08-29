@@ -52,7 +52,19 @@ export default async function PublicDynamicFormPage({
   const isAdmin = await isAdminViewer();
   const known = isAdmin ? await listFormSlugs().catch(() => []) : [];
   const slugBytes = Buffer.from(slug, "utf8").toString("hex");
-  const matchById = known.find((f) => f.id === slug);
+  // Mirror the resilient lookup in getForm() so the admin debug panel
+  // can tell "we couldn't find anything" apart from "we found a record
+  // but the status is draft" even with NFC/NFD/percent-encoding skew.
+  const normalize = (s: string) => {
+    try { return s.normalize("NFC"); } catch { return s; }
+  };
+  const wantedSlug = normalize(slug);
+  let decodedSlug = slug;
+  try { decodedSlug = normalize(decodeURIComponent(slug)); } catch { /* ignore */ }
+  const matchById = known.find((f) => {
+    const fid = normalize(f.id);
+    return fid === wantedSlug || fid === decodedSlug;
+  });
 
   let reason: string;
   if (resolveError) {

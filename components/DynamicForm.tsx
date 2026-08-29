@@ -8,12 +8,22 @@ import { useFormView } from "@/lib/use-form-view";
 
 interface Props {
   form: FormDef;
+  /**
+   * Render this form without firing analytics or accepting submissions.
+   * Used by the builder's live-preview pane: the user types into the
+   * editor, the rendered form updates, but no network traffic happens
+   * for partially-built forms.
+   */
+  preview?: boolean;
 }
 
 type FieldValue = string | string[];
 
-export default function DynamicForm({ form }: Props) {
-  useFormView(form.id, "builder");
+export default function DynamicForm({ form, preview = false }: Props) {
+  // Hook order must be stable, so always call useFormView. The hook has
+  // its own !slug guard, so passing an empty string in preview mode
+  // opts out without conditionally calling it.
+  useFormView(preview ? "" : form.id, "builder");
   const searchParams = useSearchParams();
   const utmSource = searchParams.get("utm_source") || "";
   const utmMedium = searchParams.get("utm_medium") || "";
@@ -55,6 +65,12 @@ export default function DynamicForm({ form }: Props) {
 
   async function handleSubmit() {
     if (!canSubmit || submitting) return;
+    if (preview) {
+      // Show the success state without hitting the network — lets the
+      // admin see the full "thank you" screen as it'll appear publicly.
+      setSubmitted(true);
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
@@ -176,6 +192,9 @@ function FieldRenderer({
             onChange={(e) => onChange(e.target.value)}
             placeholder={field.placeholder}
             rows={4}
+            // dir="auto" so a textarea capturing Hebrew comments stays
+            // RTL, but pasted-in English/URLs render LTR per-line.
+            dir="auto"
           />
         </div>
       );
@@ -418,6 +437,15 @@ const styles = `
   .form-nav {
     display: flex; align-items: stretch; gap: 12px;
     margin-top: 8px; padding-top: 16px; border-top: 1px solid #f3f4f6;
+    /* On mobile the submit is sticky to the viewport bottom so it's
+       always thumb-reachable on long forms. The safe-area inset keeps
+       the button clear of iOS home-bar / Android gesture areas. */
+    position: sticky;
+    bottom: 0;
+    background:
+      linear-gradient(to bottom, rgba(255,255,255,0) 0, white 16px);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+    z-index: 2;
   }
   .nav-spacer { display: none; }
   .btn-submit {
@@ -451,7 +479,12 @@ const styles = `
     .bg-blob-1 { width: 360px; height: 360px; right: -100px; }
     .bg-blob-2 { width: 280px; height: 280px; }
     .bg-blob-3 { width: 240px; height: 240px; }
-    .form-nav { align-items: center; }
+    .form-nav {
+      align-items: center;
+      position: static;
+      background: none;
+      padding-bottom: 0;
+    }
     .nav-spacer { display: block; flex: 1; }
     .btn-submit { flex: initial; width: auto; padding: 14px 32px; min-width: 160px; }
   }

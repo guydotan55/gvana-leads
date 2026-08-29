@@ -32,16 +32,34 @@ export async function middleware(request: NextRequest) {
   }
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
+  const isApi = pathname.startsWith("/api/");
+
+  // For API requests, returning a 307 redirect to /login (a GET-only page
+  // route) makes the browser re-issue POST/PUT/DELETE to /login and get a
+  // 405 back. Return a JSON 401 instead so client `fetch` callers can show
+  // a friendly "session expired" message and keep the user's in-flight
+  // form/editor state intact.
+  const authFail = (clearCookie: boolean) => {
+    if (isApi) {
+      const res = NextResponse.json(
+        { error: "session_expired" },
+        { status: 401 },
+      );
+      if (clearCookie) res.cookies.delete(SESSION_COOKIE);
+      return res;
+    }
+    const res = NextResponse.redirect(new URL("/login", request.url));
+    if (clearCookie) res.cookies.delete(SESSION_COOKIE);
+    return res;
+  };
 
   if (!token) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return authFail(false);
   }
 
   const valid = await verifySession(token);
   if (!valid) {
-    const response = NextResponse.redirect(new URL("/login", request.url));
-    response.cookies.delete(SESSION_COOKIE);
-    return response;
+    return authFail(true);
   }
 
   return NextResponse.next();

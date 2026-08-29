@@ -27,6 +27,13 @@ export interface FormField {
   placeholder?: string;
   required: boolean;
   options?: FieldOption[];
+  /**
+   * Optional regex pattern for client-side validation. Currently
+   * stored but NOT enforced at submit time — the builder UI labels
+   * this "תכונה זו תתווסף בקרוב" to set that expectation. Wiring it
+   * into DynamicForm is a separate change.
+   */
+  validationPattern?: string;
 }
 
 export interface FormConfig {

@@ -172,41 +172,61 @@ export async function listForms(): Promise<FormDef[]> {
 }
 
 /**
- * Look up a form by its stored id (a.k.a. URL slug). The Vercel /
- * Next.js edge layer occasionally hands `params.slug` to a server
- * component still URL-percent-encoded for non-ASCII paths (e.g.
- * "%D7%98%D7%A1%D7%98" instead of "טסט"). On top of that, Hebrew with
- * niqud can arrive as NFD instead of the NFC we store. We try every
- * combination so any plausible incoming form resolves.
+ * Look up a form by its stored id (a.k.a. URL slug).
+ *
+ * Hebrew slugs are fragile end-to-end. The same visible string can arrive
+ * here as any of:
+ *   - percent-encoded ("%D7%AA%D7%95%D7%9B%D7%A0%D7%99%D7%AA…")
+ *   - NFC-normalized (what we wrote)
+ *   - NFD-normalized (what some keyboards / paste paths produce)
+ *   - lowercased / un-trimmed
+ *
+ * And the row we read back from `_forms_meta` is not guaranteed to be
+ * byte-identical to what we wrote either — Google Sheets occasionally
+ * round-trips Unicode through its own normalization pass. So instead of
+ * trying to fix one normalization mismatch, we build the set of plausible
+ * forms of the request slug AND the set of plausible forms of every
+ * stored id, and look for any intersection. NFC is the canonical form;
+ * everything is compared on NFC bytes.
  */
-export async function getForm(id: string): Promise<FormDef | null> {
-  const all = await listForms();
-  const variants: string[] = [];
-  const add = (s: string | undefined | null) => {
-    if (!s) return;
-    if (!variants.includes(s)) variants.push(s);
-    try {
-      const nfc = s.normalize("NFC");
-      if (!variants.includes(nfc)) variants.push(nfc);
-    } catch {
-      // ignore — environment without normalize support
-    }
+export function slugVariants(s: string): string[] {
+  const out = new Set<string>();
+  const push = (v: string) => {
+    if (!v) return;
+    out.add(v);
+    try { out.add(v.normalize("NFC")); } catch { /* old runtime */ }
+    try { out.add(v.normalize("NFD")); } catch { /* old runtime */ }
   };
+  push(s);
+  try { push(decodeURIComponent(s)); } catch { /* malformed % */ }
+  // Some agents over-encode (encode an already-encoded string). Try one
+  // more decode pass — harmless when there's no %.
+  try { push(decodeURIComponent(decodeURIComponent(s))); } catch { /* ignore */ }
+  return Array.from(out);
+}
 
-  add(id);
-  // The string may arrive percent-encoded; try a one-shot decode.
-  try {
-    add(decodeURIComponent(id));
-  } catch {
-    // malformed encoding — ignore and stick with the literal
-  }
-
-  for (let i = 0; i < variants.length; i += 1) {
-    const v = variants[i];
-    const hit = all.find((f) => f.id === v || f.id.normalize("NFC") === v);
-    if (hit) return hit;
+/**
+ * Pure matcher — find a form in a given list by id with NFC/NFD/percent-
+ * encoding tolerance. Exported so tests can exercise it without mocking
+ * the Sheets layer.
+ */
+export function findFormInList(list: FormDef[], id: string): FormDef | null {
+  const toNFC = (v: string) => {
+    try { return v.normalize("NFC"); } catch { return v; }
+  };
+  const wanted = new Set(slugVariants(id).map(toNFC));
+  for (const f of list) {
+    const candidates = slugVariants(f.id).map(toNFC);
+    for (let i = 0; i < candidates.length; i += 1) {
+      if (wanted.has(candidates[i])) return f;
+    }
   }
   return null;
+}
+
+export async function getForm(id: string): Promise<FormDef | null> {
+  const all = await listForms();
+  return findFormInList(all, id);
 }
 
 /** Public for diagnostic 404 page. */
